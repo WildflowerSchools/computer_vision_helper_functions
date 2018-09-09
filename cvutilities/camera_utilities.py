@@ -238,6 +238,8 @@ def estimate_camera_pose_from_image_points(
         raise ValueError('One or both sets of image points appear to be empty')
     image_points_1 = np.asarray(image_points_1).reshape((-1, 2))
     image_points_2 = np.asarray(image_points_2).reshape((-1, 2))
+    if image_points_1.shape != image_points_2.shape:
+        raise ValueError('Sets of image points do not appear to be the same shape')
     camera_matrix = np.asarray(camera_matrix).reshape((3,3))
     rotation_vector_1 = np.asarray(rotation_vector_1).reshape(3)
     translation_vector_1 = np.asarray(translation_vector_1).reshape(3)
@@ -274,6 +276,8 @@ def reconstruct_object_points_from_camera_poses(
         raise ValueError('One or both sets of image points appear to be empty')
     image_points_1 = np.asarray(image_points_1).reshape((-1, 2))
     image_points_2 = np.asarray(image_points_2).reshape((-1, 2))
+    if image_points_1.shape != image_points_2.shape:
+        raise ValueError('Sets of image points do not appear to be the same shape')
     camera_matrix = np.asarray(camera_matrix).reshape((3,3))
     rotation_vector_1 = np.asarray(rotation_vector_1).reshape(3)
     translation_vector_1 = np.asarray(translation_vector_1).reshape(3)
@@ -310,6 +314,8 @@ def reconstruct_object_points_from_relative_camera_pose(
         raise ValueError('One or both sets of image points appear to be empty')
     image_points_1 = np.asarray(image_points_1).reshape((-1, 2))
     image_points_2 = np.asarray(image_points_2).reshape((-1, 2))
+    if image_points_1.shape != image_points_2.shape:
+        raise ValueError('Sets of image points do not appear to be the same shape')
     camera_matrix = np.asarray(camera_matrix).reshape((3,3))
     relative_rotation_vector = np.asarray(relative_rotation_vector).reshape(3)
     relative_translation_vector = np.asarray(relative_translation_vector).reshape(3)
@@ -341,6 +347,8 @@ def reconstruct_object_points_from_image_points(
         raise ValueError('One or both sets of image points appear to be empty')
     image_points_1 = np.asarray(image_points_1).reshape((-1, 2))
     image_points_2 = np.asarray(image_points_2).reshape((-1, 2))
+    if image_points_1.shape != image_points_2.shape:
+        raise ValueError('Sets of image points do not appear to be the same shape')
     camera_matrix = np.asarray(camera_matrix).reshape((3,3))
     rotation_vector_1 = np.asarray(rotation_vector_1).reshape(3)
     translation_vector_1 = np.asarray(translation_vector_1).reshape(3)
@@ -503,6 +511,8 @@ def estimate_camera_poses_from_plane_image_points(
         raise ValueError('One or both sets of image points appear to be empty')
     image_points_1 = np.asarray(image_points_1).reshape((-1, 2))
     image_points_2 = np.asarray(image_points_2).reshape((-1, 2))
+    if image_points_1.shape != image_points_2.shape:
+        raise ValueError('Sets of image points do not appear to be the same shape')
     camera_matrix = np.asarray(camera_matrix).reshape((3,3))
     relative_rotation_vector, relative_translation_vector = estimate_camera_pose_from_image_points(
         image_points_1,
