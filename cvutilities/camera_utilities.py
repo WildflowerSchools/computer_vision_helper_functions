@@ -294,7 +294,7 @@ def reconstruct_object_points_from_camera_poses(
     rotation_vector_2 = np.asarray(rotation_vector_2)
     translation_vector_2 = np.asarray(translation_vector_2)
     if image_points_1.size == 0 or image_points_2.size == 0:
-        raise ValueError('One or both sets of image points appear to be empty')
+        return np.zeros((0,3))
     image_points_1 = image_points_1.reshape((-1, 2))
     image_points_2 = image_points_2.reshape((-1, 2))
     if image_points_1.shape != image_points_2.shape:
@@ -339,7 +339,7 @@ def reconstruct_object_points_from_relative_camera_pose(
     rotation_vector_1 = np.asarray(rotation_vector_1)
     translation_vector_1 = np.asarray(translation_vector_1)
     if image_points_1.size == 0 or image_points_2.size == 0:
-        raise ValueError('One or both sets of image points appear to be empty')
+        return np.zeros((0,3))
     image_points_1 = image_points_1.reshape((-1, 2))
     image_points_2 = image_points_2.reshape((-1, 2))
     if image_points_1.shape != image_points_2.shape:
@@ -377,7 +377,7 @@ def reconstruct_object_points_from_image_points(
     rotation_vector_1 = np.asarray(rotation_vector_1)
     translation_vector_1 = np.asarray(translation_vector_1)
     if image_points_1.size == 0 or image_points_2.size == 0:
-        raise ValueError('One or both sets of image points appear to be empty')
+        return np.zeros((0,3))
     image_points_1 = image_points_1.reshape((-1, 2))
     image_points_2 = image_points_2.reshape((-1, 2))
     if image_points_1.shape != image_points_2.shape:

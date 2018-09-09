@@ -72,8 +72,14 @@ def fetch_openpose_data_from_s3_multiple_cameras(
 def rms_projection_error(
     image_points,
     image_points_reconstructed):
-    image_points = np.squeeze(image_points)
-    image_points_reconstructed = np.squeeze(image_points_reconstructed)
+    image_points = np.asarray(image_points)
+    image_points_reconstructed = np.asarray(image_points_reconstructed)
+    if image_points.size == 0 or image_points_reconstructed.size == 0:
+        return np.nan
+    image_points = image_points.reshape((-1,2))
+    image_points_reconstructed = image_points_reconstructed.reshape((-1,2))
+    if image_points.shape != image_points_reconstructed.shape:
+        raise ValueError('Sets of image points do not appear to be the same shape')
     rms_error = np.sqrt(np.sum(np.square(image_points_reconstructed - image_points))/image_points.shape[0])
     return rms_error
 
@@ -82,6 +88,24 @@ def extract_common_keypoints(
     keypoint_confidence_scores_a,
     keypoint_positions_b,
     keypoint_confidence_scores_b):
+    keypoint_positions_a = np.asarray(keypoint_positions_a)
+    keypoint_confidence_scores_a = np.asarray(keypoint_confidence_scores_a)
+    keypoint_positions_b = np.asarray(keypoint_positions_b)
+    keypoint_confidence_scores_b = np.asarray(keypoint_confidence_scores_b)
+    if (
+        keypoint_positions_a.size == 0 or
+        keypoint_confidence_scores_a.size == 0 or
+        keypoint_positions_b.size == 0 or
+        keypoint_confidence_scores_b.size == 0):
+        raise ValueError('One or both sets of keypoints or confidence scores appear to be empty')
+    keypoint_positions_a = keypoint_positions_a.reshape((-1, 2))
+    keypoint_confidence_scores_a = keypoint_confidence_scores_a.flatten()
+    keypoint_positions_b = keypoint_positions_b.reshape((-1, 2))
+    keypoint_confidence_scores_b = keypoint_confidence_scores_b.flatten()
+    if (keypoint_positions_a.shape[0] != keypoint_confidence_scores_a.shape[0] or
+        keypoint_positions_a.shape[0] != keypoint_positions_b.shape[0] or
+        keypoint_positions_a.shape[0] != keypoint_confidence_scores_b.shape[0]):
+        raise ValueError('Keypoint arrays do not appear to be the same shape')
     common_keypoint_positions_mask = np.logical_and(
         keypoint_confidence_scores_a > 0.0,
         keypoint_confidence_scores_b > 0.0)
@@ -92,6 +116,8 @@ def extract_common_keypoints(
 def populate_array(
     partial_array,
     mask):
+    partial_array = np.asarray(partial_array)
+    mask = np.asarray(mask)
     array_dims = [len(mask)] + list(partial_array.shape[1:])
     array = np.full(array_dims, np.nan)
     array[mask] = partial_array
@@ -105,7 +131,13 @@ def calculate_pose_3d(
     rotation_vector_b,
     translation_vector_b,
     camera_matrix,
-    distortion_coefficients = 0):
+    distortion_coefficients = np.array([])):
+    rotation_vector_a = np.asarray(rotation_vector_a).reshape(3)
+    translation_vector_a = np.asarray(translation_vector_a).reshape(3)
+    rotation_vector_b = np.asarray(rotation_vector_b).reshape(3)
+    translation_vector_b = np.asarray(translation_vector_b).reshape(3)
+    camera_matrix  = np.asarray(camera_matrix).reshape((3,3))
+    distortion_coefficients = np.asarray(distortion_coefficients)
     image_points_a, image_points_b, common_keypoint_positions_mask = extract_common_keypoints(
         openpose_data_single_person_a['keypoint_positions'],
         openpose_data_single_person_a['keypoint_confidence_scores'],
@@ -165,7 +197,7 @@ def calculate_poses_3d_camera_pair(
     num_people_b = len(openpose_data_single_camera_b)
     poses_3d = np.full((num_people_a, num_people_b, num_joints, 3), np.nan)
     projection_errors = np.full((num_people_a, num_people_b), np.nan)
-    match_mask = np.full((num_people_a, num_people_b), False)
+    # match_mask = np.full((num_people_a, num_people_b), False)
     for person_index_a in range(num_people_a):
         for person_index_b in range(num_people_b):
             pose, projection_error_a, projection_error_b = calculate_pose_3d(
@@ -178,9 +210,12 @@ def calculate_poses_3d_camera_pair(
                 camera_matrix,
                 distortion_coefficients)[:3]
             poses_3d[person_index_a, person_index_b] = pose
-            projection_errors[person_index_a, person_index_b] = max(
-                projection_error_a,
-                projection_error_b)
+            if np.isnan(projection_error_a) or np.isnan(projection_error_b):
+                projection_errors[person_index_a, person_index_b] = np.nan
+            else:
+                projection_errors[person_index_a, person_index_b] = max(
+                    projection_error_a,
+                    projection_error_b)
     return poses_3d, projection_errors
 
 def extract_matched_poses_3d_camera_pair(
@@ -191,8 +226,10 @@ def extract_matched_poses_3d_camera_pair(
     for person_index_a in range(projection_errors.shape[0]):
         for person_index_b in range(projection_errors.shape[1]):
             matches[person_index_a, person_index_b] = (
-                np.argmin(projection_errors[person_index_a, :]) == person_index_b and
-                np.argmin(projection_errors[:, person_index_b]) == person_index_a and
+                not np.all(np.isnan(projection_errors[person_index_a, :])) and
+                np.nanargmin(projection_errors[person_index_a, :]) == person_index_b and
+                not np.all(np.isnan(projection_errors[:, person_index_b])) and
+                np.nanargmin(projection_errors[:, person_index_b]) == person_index_a and
                 projection_errors[person_index_a, person_index_b] < projection_error_threshold)
     matched_poses_3d = poses_3d[matches]
     matched_projection_errors = projection_errors[matches]
