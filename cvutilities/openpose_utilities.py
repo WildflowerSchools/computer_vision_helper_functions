@@ -6,6 +6,50 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 
+# These parameters correspond to the OpenPose output we've been generating (I
+# think) but the newest OpenPose version changes these (more body parts,
+# 'pose_keypoints_2d' instead of 'pose_keypoints', etc.)
+people_list_name = 'people'
+keypoint_list_name = 'pose_keypoints'
+num_body_parts = 18
+body_part_long_names = [
+    "Nose",
+    "Neck",
+    "RShoulder",
+    "RElbow",
+    "RWrist",
+    "LShoulder",
+    "LElbow",
+    "LWrist",
+    "RHip",
+    "RKnee",
+    "RAnkle",
+    "LHip",
+    "LKnee",
+    "LAnkle",
+    "REye",
+    "LEye",
+    "REar",
+    "LEar"]
+body_part_connectors = [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 4],
+    [1, 5],
+    [5, 6],
+    [6, 7],
+    [1, 8],
+    [8, 9],
+    [9, 10],
+    [1, 11],
+    [11, 12],
+    [12, 13],
+    [0, 14],
+    [14, 16],
+    [0, 15],
+    [15, 17]]
+
 def generate_s3_datetime_strings(
     datetime):
     datetime_native_utc_naive = cvutilities.datetime_utilities.convert_to_native_utc_naive(datetime)
