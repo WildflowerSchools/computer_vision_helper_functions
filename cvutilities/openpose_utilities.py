@@ -177,22 +177,22 @@ class Pose2DRoom:
 
 ### OLDER CODE ###
 
-def extract_keypoint_positions(openpose_json_data_single_person, openpose_keypoint_vector_name='pose_keypoints'):
+def extract_keypoint_positions_UNUSED(openpose_json_data_single_person, openpose_keypoint_vector_name='pose_keypoints'):
     keypoint_list = openpose_json_data_single_person[openpose_keypoint_vector_name]
     keypoint_positions = np.array(keypoint_list).reshape((-1, 3))[:,:2]
     return keypoint_positions
 
-def extract_keypoint_confidence_scores(openpose_json_data_single_person, openpose_keypoint_vector_name='pose_keypoints'):
+def extract_keypoint_confidence_scores_UNUSED(openpose_json_data_single_person, openpose_keypoint_vector_name='pose_keypoints'):
     keypoint_list = openpose_json_data_single_person[openpose_keypoint_vector_name]
     keypoint_confidence_scores = np.array(keypoint_list).reshape((-1, 3))[:,2]
     return keypoint_confidence_scores
 
-def extract_keypoints(openpose_json_data_single_person, openpose_keypoint_vector_name='pose_keypoints'):
+def extract_keypoints_UNUSED(openpose_json_data_single_person, openpose_keypoint_vector_name='pose_keypoints'):
     keypoint_positions = extract_keypoint_positions(openpose_json_data_single_person, openpose_keypoint_vector_name)
     keypoint_confidence_scores = extract_keypoint_confidence_scores(openpose_json_data_single_person, openpose_keypoint_vector_name)
     return keypoint_positions, keypoint_confidence_scores
 
-def fetch_openpose_data_from_s3_single_camera(
+def fetch_openpose_data_from_s3_single_camera_UNUSED(
     classroom_name,
     datetime,
     camera_name,
@@ -216,7 +216,7 @@ def fetch_openpose_data_from_s3_single_camera(
             'keypoint_confidence_scores': extract_keypoint_confidence_scores(openpose_json_data_single_person)})
     return openpose_data_single_camera
 
-def fetch_openpose_data_from_s3_multiple_cameras(
+def fetch_openpose_data_from_s3_multiple_cameras_UNUSED(
     classroom_name,
     datetime,
     camera_names,
@@ -248,33 +248,13 @@ def rms_projection_error(
     return rms_error
 
 def extract_common_keypoints(
-    keypoint_positions_a,
-    keypoint_confidence_scores_a,
-    keypoint_positions_b,
-    keypoint_confidence_scores_b):
-    keypoint_positions_a = np.asarray(keypoint_positions_a)
-    keypoint_confidence_scores_a = np.asarray(keypoint_confidence_scores_a)
-    keypoint_positions_b = np.asarray(keypoint_positions_b)
-    keypoint_confidence_scores_b = np.asarray(keypoint_confidence_scores_b)
-    if (
-        keypoint_positions_a.size == 0 or
-        keypoint_confidence_scores_a.size == 0 or
-        keypoint_positions_b.size == 0 or
-        keypoint_confidence_scores_b.size == 0):
-        raise ValueError('One or both sets of keypoints or confidence scores appear to be empty')
-    keypoint_positions_a = keypoint_positions_a.reshape((-1, 2))
-    keypoint_confidence_scores_a = keypoint_confidence_scores_a.flatten()
-    keypoint_positions_b = keypoint_positions_b.reshape((-1, 2))
-    keypoint_confidence_scores_b = keypoint_confidence_scores_b.flatten()
-    if (keypoint_positions_a.shape[0] != keypoint_confidence_scores_a.shape[0] or
-        keypoint_positions_a.shape[0] != keypoint_positions_b.shape[0] or
-        keypoint_positions_a.shape[0] != keypoint_confidence_scores_b.shape[0]):
-        raise ValueError('Keypoint arrays do not appear to be the same shape')
+    pose_a,
+    pose_b):
     common_keypoint_positions_mask = np.logical_and(
-        keypoint_confidence_scores_a > 0.0,
-        keypoint_confidence_scores_b > 0.0)
-    image_points_a = keypoint_positions_a[common_keypoint_positions_mask]
-    image_points_b = keypoint_positions_b[common_keypoint_positions_mask]
+        pose_a.valid_keypoints,
+        pose_b.valid_keypoints)
+    image_points_a = pose_a.pose_keypoints[common_keypoint_positions_mask]
+    image_points_b = pose_b.pose_keypoints[common_keypoint_positions_mask]
     return image_points_a, image_points_b, common_keypoint_positions_mask
 
 def populate_array(
@@ -288,8 +268,8 @@ def populate_array(
     return array
 
 def calculate_pose_3d(
-    openpose_data_single_person_a,
-    openpose_data_single_person_b,
+    pose_a,
+    pose_b,
     rotation_vector_a,
     translation_vector_a,
     rotation_vector_b,
@@ -303,10 +283,8 @@ def calculate_pose_3d(
     camera_matrix  = np.asarray(camera_matrix).reshape((3,3))
     distortion_coefficients = np.asarray(distortion_coefficients)
     image_points_a, image_points_b, common_keypoint_positions_mask = extract_common_keypoints(
-        openpose_data_single_person_a['keypoint_positions'],
-        openpose_data_single_person_a['keypoint_confidence_scores'],
-        openpose_data_single_person_b['keypoint_positions'],
-        openpose_data_single_person_b['keypoint_confidence_scores'])
+        pose_a,
+        pose_b)
     image_points_a_distortion_removed = cvutilities.camera_utilities.undistort_points(
         image_points_a,
         camera_matrix,
@@ -348,25 +326,24 @@ def calculate_pose_3d(
     return pose_3d, rms_projection_error_a, rms_projection_error_b
 
 def calculate_poses_3d_camera_pair(
-    openpose_data_single_camera_a,
-    openpose_data_single_camera_b,
+    poses_camera_a,
+    poses_camera_b,
     rotation_vector_a,
     translation_vector_a,
     rotation_vector_b,
     translation_vector_b,
     camera_matrix,
-    distortion_coefficients = 0,
-    num_joints = 18):
-    num_people_a = len(openpose_data_single_camera_a)
-    num_people_b = len(openpose_data_single_camera_b)
-    poses_3d = np.full((num_people_a, num_people_b, num_joints, 3), np.nan)
+    distortion_coefficients = 0):
+    num_people_a = poses_camera_a.num_poses
+    num_people_b = poses_camera_b.num_poses
+    poses_3d = np.full((num_people_a, num_people_b, num_body_parts, 3), np.nan)
     projection_errors = np.full((num_people_a, num_people_b), np.nan)
     # match_mask = np.full((num_people_a, num_people_b), False)
     for person_index_a in range(num_people_a):
         for person_index_b in range(num_people_b):
             pose, projection_error_a, projection_error_b = calculate_pose_3d(
-                openpose_data_single_camera_a[person_index_a],
-                openpose_data_single_camera_b[person_index_b],
+                poses_camera_a.poses[person_index_a],
+                poses_camera_b.poses[person_index_b],
                 rotation_vector_a,
                 translation_vector_a,
                 rotation_vector_b,
@@ -402,24 +379,22 @@ def extract_matched_poses_3d_camera_pair(
 
 def calculate_poses_3d_multiple_cameras(
     openpose_data_multiple_cameras,
-    camera_calibration_data_multiple_cameras,
-    num_joints = 18):
-    num_cameras = len(openpose_data_multiple_cameras)
+    camera_calibration_data_multiple_cameras):
+    num_cameras = openpose_data_multiple_cameras.num_cameras
     poses_3d_multiple_cameras = [[None]*num_cameras for _ in range(num_cameras)]
     projection_errors_multiple_cameras = [[None]*num_cameras for _ in range(num_cameras)]
     for camera_index_a in range(num_cameras):
         for camera_index_b in range(num_cameras):
             if camera_index_b > camera_index_a:
                 poses_3d_multiple_cameras[camera_index_a][camera_index_b], projection_errors_multiple_cameras[camera_index_a][camera_index_b] = calculate_poses_3d_camera_pair(
-                    openpose_data_multiple_cameras[camera_index_a],
-                    openpose_data_multiple_cameras[camera_index_b],
+                    openpose_data_multiple_cameras.frames[camera_index_a],
+                    openpose_data_multiple_cameras.frames[camera_index_b],
                     camera_calibration_data_multiple_cameras[camera_index_a]['rotation_vector'],
                     camera_calibration_data_multiple_cameras[camera_index_a]['translation_vector'],
                     camera_calibration_data_multiple_cameras[camera_index_b]['rotation_vector'],
                     camera_calibration_data_multiple_cameras[camera_index_b]['translation_vector'],
                     camera_calibration_data_multiple_cameras[camera_index_a]['camera_matrix'],
-                    camera_calibration_data_multiple_cameras[camera_index_a]['distortion_coefficients'],
-                    num_joints)
+                    camera_calibration_data_multiple_cameras[camera_index_a]['distortion_coefficients'])
     return poses_3d_multiple_cameras, projection_errors_multiple_cameras
 
 def extract_matched_poses_3d_multiple_cameras(
@@ -469,12 +444,10 @@ def extract_matched_poses_3d_multiple_cameras(
 def calculate_matched_poses_3d_multiple_cameras(
     openpose_data_multiple_cameras,
     camera_calibration_data_multiple_cameras,
-    projection_error_threshold = 15.0,
-    num_joints = 18):
+    projection_error_threshold = 15.0):
     poses_3d_multiple_cameras, projection_errors_multiple_cameras = calculate_poses_3d_multiple_cameras(
         openpose_data_multiple_cameras,
-        camera_calibration_data_multiple_cameras,
-        num_joints)
+        camera_calibration_data_multiple_cameras)
     matched_poses_3d, matched_projection_errors, match_indices, subgraphs_list, person_graph = extract_matched_poses_3d_multiple_cameras(
         poses_3d_multiple_cameras,
         projection_errors_multiple_cameras,
@@ -482,58 +455,57 @@ def calculate_matched_poses_3d_multiple_cameras(
     return matched_poses_3d, matched_projection_errors, match_indices
 
 def draw_2d_pose_data_one_person(
-    openpose_data_single_person,
+    pose,
     pose_tag = None):
-    all_points = openpose_data_single_person['keypoint_positions']
-    confidence_scores = openpose_data_single_person['keypoint_confidence_scores']
-    valid_points = all_points[confidence_scores > 0.0]
+    all_points = pose.pose_keypoints
+    valid_points = all_points[pose.valid_keypoints]
     centroid = np.mean(valid_points, 0)
     cvutilities.camera_utilities.draw_2d_image_points(valid_points)
     plt.text(centroid[0], centroid[1], pose_tag)
 
 def plot_2d_pose_data_one_person(
-    openpose_data_single_person,
+    pose,
     pose_tag = None,
     image_size=[1296, 972]):
     draw_2d_pose_data_one_person(
-        openpose_data_single_person,
+        pose,
         pose_tag)
     cvutilities.camera_utilities.format_2d_image_plot(image_size)
     plt.show()
 
 def draw_2d_pose_data_one_camera(
-    openpose_data_single_camera,
-    pose_tags_single_camera = None):
-    num_people = len(openpose_data_single_camera)
-    if pose_tags_single_camera is None:
-        pose_tags_single_camera = range(num_people)
+    poses,
+    pose_tags = None):
+    num_people = poses.num_poses
+    if pose_tags is None:
+        pose_tags = range(num_people)
     for person_index in range(num_people):
         draw_2d_pose_data_one_person(
-            openpose_data_single_camera[person_index],
-            pose_tags_single_camera[person_index])
+            poses.poses[person_index],
+            pose_tags[person_index])
 
 def plot_2d_pose_data_one_camera(
-    openpose_data_single_camera,
-    pose_tags_single_camera = None,
+    poses,
+    pose_tags = None,
     image_size=[1296, 972]):
     draw_2d_pose_data_one_camera(
-        openpose_data_single_camera,
-        pose_tags_single_camera)
+        poses,
+        pose_tags)
     cvutilities.camera_utilities.format_2d_image_plot(image_size)
     plt.show()
 
 def plot_2d_pose_data_multiple_cameras(
-    openpose_data_multiple_cameras,
+    poses_multiple_cameras,
     pose_tags_multiple_cameras = None,
     image_size=[1296, 972]):
-    num_cameras = len(openpose_data_multiple_cameras)
+    num_cameras = poses_multiple_cameras.num_cameras
     for camera_index in range(num_cameras):
         if pose_tags_multiple_cameras is None:
             pose_tags_single_camera = None
         else:
             pose_tags_single_camera = pose_tags_multiple_cameras[camera_index]
         plot_2d_pose_data_one_camera(
-            openpose_data_multiple_cameras[camera_index],
+            poses_multiple_cameras.frames[camera_index],
             pose_tags_single_camera,
             image_size)
 
