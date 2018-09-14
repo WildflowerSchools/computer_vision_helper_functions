@@ -6,11 +6,39 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 
-# These parameters correspond to the OpenPose output we've been generating (I
-# think) but the newest OpenPose version changes these (more body parts,
-# 'pose_keypoints_2d' instead of 'pose_keypoints', etc.)
-people_list_name = 'people'
-keypoint_list_name = 'pose_keypoints'
+# For now the Wildflower-specific functionality is intermingled with the more
+# general S3 functionality. We should probably separate these at some point.
+classroom_data_wildflower_s3_bucket_name = 'wf-classroom-data'
+pose_2d_data_wildflower_s3_directory_name = '2D-pose'
+
+def generate_pose_2d_frame_wildflower_s3_object_name(
+    classroom_name,
+    camera_name,
+    datetime):
+    date_string, time_string = generate_wildflower_s3_datetime_strings(datetime)
+    pose_2d_frame_wildflower_s3_object_name = 'camera-{}/{}/{}/{}/still_{}-{}_keypoints.json'.format(
+        classroom_name,
+        pose_2d_data_wildflower_s3_directory_name,
+        date_string,
+        camera_name,
+        date_string,
+        time_string)
+    return pose_2d_frame_wildflower_s3_object_name
+
+def generate_wildflower_s3_datetime_strings(
+    datetime):
+    datetime_native_utc_naive = cvutilities.datetime_utilities.convert_to_native_utc_naive(datetime)
+    date_string = datetime_native_utc_naive.strftime('%Y-%m-%d')
+    time_string = datetime_native_utc_naive.strftime('%H-%M-%S')
+    return date_string, time_string
+
+# For now, the OpenPose-specific functionality is intermingled with the more
+# general pose analysis functionality. We should probably separate these at some
+# point. The parameters below correspond to the OpenPose output we've been
+# generating (I think) but the newest OpenPose version changes these (more body
+# parts, 'pose_keypoints_2d' instead of 'pose_keypoints', etc.)
+openpose_people_list_name = 'people'
+openpose_keypoint_vector_name = 'pose_keypoints'
 num_body_parts = 18
 body_part_long_names = [
     "Nose",
@@ -50,26 +78,118 @@ body_part_connectors = [
     [0, 15],
     [15, 17]]
 
-def generate_s3_datetime_strings(
-    datetime):
-    datetime_native_utc_naive = cvutilities.datetime_utilities.convert_to_native_utc_naive(datetime)
-    date_string = datetime_native_utc_naive.strftime('%Y-%m-%d')
-    time_string = datetime_native_utc_naive.strftime('%H-%M-%S')
-    return date_string, time_string
+class Pose2DPerson:
+    def __init__(self, pose_keypoints, pose_confidence_scores, valid_keypoints):
+        pose_keypoints = np.asarray(pose_keypoints)
+        pose_confidence_scores = np.asarray(pose_confidence_scores)
+        valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
+        if pose_keypoints.size != num_body_parts*2:
+            raise ValueError('Pose keypoints array does not appear to be of size {}*2'.format(num_body_parts))
+        if pose_confidence_scores.size != num_body_parts:
+            raise ValueError('Pose confidence scores vector does not appear to be of size {}'.format(num_body_parts))
+        if valid_keypoints.size != num_body_parts:
+            raise ValueError('Valid keypoints vector does not appear to be of size {}'.format(num_body_parts))
+        pose_keypoints = pose_keypoints.reshape((num_body_parts, 2))
+        pose_confidence_scores = pose_confidence_scores.reshape(num_body_parts)
+        valid_keypoints = valid_keypoints.reshape(num_body_parts)
+        self.pose_keypoints = pose_keypoints
+        self.pose_confidence_scores = pose_confidence_scores
+        self.valid_keypoints = valid_keypoints
 
-def extract_keypoint_positions(openpose_json_data_single_person, keypoint_list_name='pose_keypoints'):
-    keypoint_list = openpose_json_data_single_person[keypoint_list_name]
+    @classmethod
+    def from_openpose_person_json_data(cls, json_data):
+        keypoint_vector = np.asarray(json_data[openpose_keypoint_vector_name])
+        if keypoint_vector.size != num_body_parts*3:
+            raise ValueError('OpenPose keypoint vector does not appear to be of size {}*3'.format(num_body_parts))
+        keypoint_array = keypoint_vector.reshape((num_body_parts, 3))
+        pose_keypoints = keypoint_array[:, :2]
+        pose_confidence_scores = keypoint_array[:, 2]
+        valid_keypoints = np.not_equal(pose_confidence_scores, 0.0)
+        return cls(pose_keypoints, pose_confidence_scores, valid_keypoints)
+
+    @classmethod
+    def from_openpose_person_json_string(cls, json_string):
+        json_data = json.loads(json_string)
+        return cls.from_openpose_person_json_data(json_data)
+
+class Pose2DFrame:
+    def __init__(self, poses):
+        self.poses = poses
+        self.num_poses = len(poses)
+
+    @classmethod
+    def from_openpose_frame_json_data(cls, json_data):
+        people_json_data = json_data[openpose_people_list_name]
+        poses = [Pose2DPerson.from_openpose_person_json_data(person_json_data) for person_json_data in people_json_data]
+        return cls(poses)
+
+    @classmethod
+    def from_openpose_frame_json_string(cls, json_string):
+        json_data = json.loads(json_string)
+        return cls.from_openpose_frame_json_data(json_data)
+
+    @classmethod
+    def from_openpose_frame_json_file(cls, json_file_path):
+        with open(json_file_path) as json_file:
+            json_data = json.load(json_file)
+        return cls.from_openpose_frame_json_data(json_data)
+
+    @classmethod
+    def from_openpose_frame_s3_object(cls, s3_bucket_name, s3_object_name):
+        s3_object = boto3.resource('s3').Object(s3_bucket_name, s3_object_name)
+        s3_object_content = s3_object.get()['Body'].read().decode('utf-8')
+        json_data = json.loads(s3_object_content)
+        return cls.from_openpose_frame_json_data(json_data)
+
+    @classmethod
+    def from_openpose_frame_wildflower_s3(
+        cls,
+        classroom_name,
+        camera_name,
+        datetime):
+        s3_bucket_name = classroom_data_wildflower_s3_bucket_name
+        s3_object_name = generate_pose_2d_frame_wildflower_s3_object_name(
+            classroom_name,
+            camera_name,
+            datetime)
+        return cls.from_openpose_frame_s3_object(s3_bucket_name, s3_object_name)
+
+class Pose2DRoom:
+    def __init__(self, frames):
+        self.frames = frames
+        self.num_cameras = len(frames)
+
+    @classmethod
+    def from_openpose_room_wildflower_s3(
+        cls,
+        classroom_name,
+        camera_names,
+        datetime):
+        s3_bucket_name = classroom_data_wildflower_s3_bucket_name
+        frames = []
+        for camera_name in camera_names:
+            s3_object_name = generate_pose_2d_frame_wildflower_s3_object_name(
+                classroom_name,
+                camera_name,
+                datetime)
+            frames.append(Pose2DFrame.from_openpose_frame_s3_object(s3_bucket_name, s3_object_name))
+        return cls(frames)
+
+### OLDER CODE ###
+
+def extract_keypoint_positions(openpose_json_data_single_person, openpose_keypoint_vector_name='pose_keypoints'):
+    keypoint_list = openpose_json_data_single_person[openpose_keypoint_vector_name]
     keypoint_positions = np.array(keypoint_list).reshape((-1, 3))[:,:2]
     return keypoint_positions
 
-def extract_keypoint_confidence_scores(openpose_json_data_single_person, keypoint_list_name='pose_keypoints'):
-    keypoint_list = openpose_json_data_single_person[keypoint_list_name]
+def extract_keypoint_confidence_scores(openpose_json_data_single_person, openpose_keypoint_vector_name='pose_keypoints'):
+    keypoint_list = openpose_json_data_single_person[openpose_keypoint_vector_name]
     keypoint_confidence_scores = np.array(keypoint_list).reshape((-1, 3))[:,2]
     return keypoint_confidence_scores
 
-def extract_keypoints(openpose_json_data_single_person, keypoint_list_name='pose_keypoints'):
-    keypoint_positions = extract_keypoint_positions(openpose_json_data_single_person, keypoint_list_name)
-    keypoint_confidence_scores = extract_keypoint_confidence_scores(openpose_json_data_single_person, keypoint_list_name)
+def extract_keypoints(openpose_json_data_single_person, openpose_keypoint_vector_name='pose_keypoints'):
+    keypoint_positions = extract_keypoint_positions(openpose_json_data_single_person, openpose_keypoint_vector_name)
+    keypoint_confidence_scores = extract_keypoint_confidence_scores(openpose_json_data_single_person, openpose_keypoint_vector_name)
     return keypoint_positions, keypoint_confidence_scores
 
 def fetch_openpose_data_from_s3_single_camera(
@@ -78,7 +198,7 @@ def fetch_openpose_data_from_s3_single_camera(
     camera_name,
     s3_bucket_name = 'wf-classroom-data',
     pose_directory_name = '2D-pose'):
-    date_string, time_string = generate_s3_datetime_strings(datetime)
+    date_string, time_string = generate_wildflower_s3_datetime_strings(datetime)
     keypoints_filename = '%s/%s/%s/%s/still_%s-%s_keypoints.json' % (
         classroom_name,
         pose_directory_name,
