@@ -116,9 +116,19 @@ class Pose2D:
         self,
         pose_tag = None):
         all_points = self.keypoints
-        valid_points = all_points[self.valid_keypoints]
-        centroid = np.mean(valid_points, 0)
-        cvutilities.camera_utilities.draw_2d_image_points(valid_points)
+        valid_keypoints = self.valid_keypoints
+        plottable_points = all_points[valid_keypoints]
+        centroid = np.mean(plottable_points, 0)
+        cvutilities.camera_utilities.draw_2d_image_points(plottable_points)
+        for body_part_connector in body_part_connectors:
+            body_part_from_index = body_part_connector[0]
+            body_part_to_index = body_part_connector[1]
+            if valid_keypoints[body_part_from_index] and valid_keypoints[body_part_to_index]:
+                plt.plot(
+                    [all_points[body_part_from_index,0],all_points[body_part_to_index, 0]],
+                    [all_points[body_part_from_index,1],all_points[body_part_to_index, 1]],
+                    'k-',
+                    alpha = 0.2)
         plt.text(centroid[0], centroid[1], pose_tag)
 
     def plot(
