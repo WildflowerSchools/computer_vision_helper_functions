@@ -455,61 +455,6 @@ def calculate_matched_poses_3d_timestep(
         projection_error_threshold)
     return matched_poses_3d, matched_projection_errors, match_indices
 
-# def draw_pose_2d(
-#     pose_2d,
-#     pose_tag = None):
-#     all_points = pose_2d.keypoints
-#     valid_points = all_points[pose_2d.valid_keypoints]
-#     centroid = np.mean(valid_points, 0)
-#     cvutilities.camera_utilities.draw_2d_image_points(valid_points)
-#     plt.text(centroid[0], centroid[1], pose_tag)
-#
-# def plot_pose_2d(
-#     pose_2d,
-#     pose_tag = None,
-#     image_size=[1296, 972]):
-#     draw_pose_2d(
-#         pose_2d,
-#         pose_tag)
-#     cvutilities.camera_utilities.format_2d_image_plot(image_size)
-#     plt.show()
-#
-# def draw_poses_2d_camera(
-#     poses_2d_camera,
-#     pose_tags = None):
-#     num_poses = poses_2d_camera.num_poses
-#     if pose_tags is None:
-#         pose_tags = range(num_poses)
-#     for pose_index in range(num_poses):
-#         draw_pose_2d(
-#             poses_2d_camera.poses[pose_index],
-#             pose_tags[pose_index])
-#
-# def plot_poses_2d_camera(
-#     poses_2d_camera,
-#     pose_tags = None,
-#     image_size=[1296, 972]):
-#     draw_poses_2d_camera(
-#         poses_2d_camera,
-#         pose_tags)
-#     cvutilities.camera_utilities.format_2d_image_plot(image_size)
-#     plt.show()
-#
-# def plot_poses_2d_timestep(
-#     poses_2d_timestep,
-#     pose_tags = None,
-#     image_size=[1296, 972]):
-#     num_cameras = poses_2d_timestep.num_cameras
-#     for camera_index in range(num_cameras):
-#         if pose_tags is None:
-#             pose_tags_single_camera = None
-#         else:
-#             pose_tags_single_camera = pose_tags[camera_index]
-#         plot_poses_2d_camera(
-#             poses_2d_timestep.cameras[camera_index],
-#             pose_tags_single_camera,
-#             image_size)
-
 def draw_pose_3d_topdown(
     pose_3d,
     pose_tag = None):
