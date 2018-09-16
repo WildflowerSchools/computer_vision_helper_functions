@@ -233,6 +233,171 @@ class Poses2DTimestep:
                 pose_tags_single_camera,
                 image_size)
 
+class Pose3D:
+    def __init__(self, keypoints, valid_keypoints, projection_error=None):
+        keypoints = np.asarray(keypoints)
+        valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
+        if keypoints.size != num_body_parts*3:
+            raise ValueError('Keypoints array does not appear to be of size {}*3'.format(num_body_parts))
+        if valid_keypoints.size != num_body_parts:
+            raise ValueError('Valid keypoints vector does not appear to be of size {}'.format(num_body_parts))
+        keypoints = keypoints.reshape((num_body_parts, 3))
+        valid_keypoints = valid_keypoints.reshape(num_body_parts)
+        self.keypoints = keypoints
+        self.valid_keypoints = valid_keypoints
+        self.projection_error = projection_error
+
+    @classmethod
+    def from_poses_2d(
+        cls,
+        pose_2d_a,
+        pose_2d_b,
+        rotation_vector_a,
+        translation_vector_a,
+        rotation_vector_b,
+        translation_vector_b,
+        camera_matrix,
+        distortion_coefficients = np.array([])):
+        rotation_vector_a = np.asarray(rotation_vector_a).reshape(3)
+        translation_vector_a = np.asarray(translation_vector_a).reshape(3)
+        rotation_vector_b = np.asarray(rotation_vector_b).reshape(3)
+        translation_vector_b = np.asarray(translation_vector_b).reshape(3)
+        camera_matrix  = np.asarray(camera_matrix).reshape((3,3))
+        distortion_coefficients = np.asarray(distortion_coefficients)
+        image_points_a, image_points_b, common_keypoint_positions_mask = extract_common_keypoints(
+            pose_2d_a,
+            pose_2d_b)
+        image_points_a_distortion_removed = cvutilities.camera_utilities.undistort_points(
+            image_points_a,
+            camera_matrix,
+            distortion_coefficients)
+        image_points_b_distortion_removed = cvutilities.camera_utilities.undistort_points(
+            image_points_b,
+            camera_matrix,
+            distortion_coefficients)
+        object_points = cvutilities.camera_utilities.reconstruct_object_points_from_camera_poses(
+            image_points_a_distortion_removed,
+            image_points_b_distortion_removed,
+            camera_matrix,
+            rotation_vector_a,
+            translation_vector_a,
+            rotation_vector_b,
+            translation_vector_b)
+        image_points_a_reconstructed = cvutilities.camera_utilities.project_points(
+            object_points,
+            rotation_vector_a,
+            translation_vector_a,
+            camera_matrix,
+            distortion_coefficients)
+        image_points_b_reconstructed = cvutilities.camera_utilities.project_points(
+            object_points,
+            rotation_vector_b,
+            translation_vector_b,
+            camera_matrix,
+            distortion_coefficients)
+        projection_error_a = rms_projection_error(
+            image_points_a,
+            image_points_a_reconstructed)
+        projection_error_b = rms_projection_error(
+            image_points_b,
+            image_points_b_reconstructed)
+        object_points = object_points.reshape((-1, 3))
+        keypoints = populate_array(
+            object_points,
+            common_keypoint_positions_mask)
+        if np.isnan(projection_error_a) or np.isnan(projection_error_b):
+            projection_error = np.nan
+        else:
+            projection_error = max(
+                projection_error_a,
+                projection_error_b)
+        return cls(keypoints, common_keypoint_positions_mask, projection_error)
+
+class Poses3DTimestep:
+    def __init__(
+        self,
+        pose_graph,
+        num_cameras,
+        num_poses):
+        self.pose_graph = pose_graph
+        self.num_cameras = num_cameras
+        self.num_poses = num_poses
+
+    @classmethod
+    def from_poses_2d_timestep(
+        cls,
+        poses_2d,
+        cameras):
+        pose_graph = nx.Graph()
+        num_cameras = poses_2d.num_cameras
+        num_poses = np.zeros(num_cameras, dtype=int)
+        for camera_index_a in range(num_cameras - 1):
+            for camera_index_b in range(camera_index_a + 1, num_cameras):
+                num_poses_a = poses_2d.cameras[camera_index_a].num_poses
+                num_poses_b = poses_2d.cameras[camera_index_b].num_poses
+                num_poses[camera_index_a] = num_poses_a
+                num_poses[camera_index_b] = num_poses_b
+                for pose_index_a in range(num_poses_a):
+                    for pose_index_b in range(num_poses_b):
+                        pose_3d = Pose3D.from_poses_2d(
+                            poses_2d.cameras[camera_index_a].poses[pose_index_a],
+                            poses_2d.cameras[camera_index_b].poses[pose_index_b],
+                            cameras[camera_index_a]['rotation_vector'],
+                            cameras[camera_index_a]['translation_vector'],
+                            cameras[camera_index_b]['rotation_vector'],
+                            cameras[camera_index_b]['translation_vector'],
+                            cameras[camera_index_a]['camera_matrix'],
+                            cameras[camera_index_a]['distortion_coefficients'])
+                        pose_graph.add_edge(
+                            (camera_index_a, pose_index_a),
+                            (camera_index_b, pose_index_b),
+                            pose=pose_3d)
+        return cls(pose_graph, num_cameras, num_poses)
+
+    def extract_matched_poses(
+        self,
+        projection_error_threshold = 15.0):
+        # For now, we build a new copy of the graph with just the matched edges.
+        # We should really do this by creating pointers back to the original
+        # graph.
+        matched_graph = nx.Graph()
+        for camera_index_a in range(self.num_cameras - 1):
+            for camera_index_b in range(camera_index_a + 1, self.num_cameras):
+                num_poses_a = self.num_poses[camera_index_a]
+                num_poses_b = self.num_poses[camera_index_b]
+                # For each pair of cameras, we build an array of projection errors
+                # because it's easier to express our matching rule as a rule on an array
+                # rather than a rule on the graph.
+                projection_errors = np.full((num_poses_a, num_poses_b), np.nan)
+                for pose_index_a in range(num_poses_a):
+                    for pose_index_b in range(num_poses_b):
+                        projection_errors[pose_index_a, pose_index_b] = self.pose_graph[(camera_index_a, pose_index_a)][(camera_index_b, pose_index_b)]['pose'].projection_error
+                # Apply our matching rule to the array of projection errors.
+                for pose_index_a in range(num_poses_a):
+                    for pose_index_b in range(num_poses_b):
+                        if (
+                            not np.all(np.isnan(projection_errors[pose_index_a, :])) and
+                            np.nanargmin(projection_errors[pose_index_a, :]) == pose_index_b and
+                            not np.all(np.isnan(projection_errors[:, pose_index_b])) and
+                            np.nanargmin(projection_errors[:, pose_index_b]) == pose_index_a and
+                            projection_errors[pose_index_a, pose_index_b] < projection_error_threshold):
+                            matched_graph.add_edge(
+                                (camera_index_a, pose_index_a),
+                                (camera_index_b, pose_index_b),
+                                pose=self.pose_graph[(camera_index_a, pose_index_a)][(camera_index_b, pose_index_b)]['pose'])
+        # For now, we make a copy of each subgraph. We should really do this by
+        # creating pointers back to the original graph.
+        subgraphs_list = [matched_graph.subgraph(component).copy() for component in nx.connected_components(matched_graph)]
+        matched_poses_3d=[]
+        match_indices_list = []
+        for subgraph_index in range(len(subgraphs_list)):
+            if nx.number_of_edges(subgraphs_list[subgraph_index]) > 0:
+                best_edge = sorted(subgraphs_list[subgraph_index].edges.data(), key = lambda x: x[2]['pose'].projection_error)[0]
+                matched_poses_3d.append(best_edge[2]['pose'])
+                match_indices_list.append(np.vstack((best_edge[0], best_edge[1])))
+        match_indices = np.asarray(match_indices_list)
+        return matched_poses_3d, match_indices
+
 def rms_projection_error(
     image_points,
     image_points_reconstructed):
