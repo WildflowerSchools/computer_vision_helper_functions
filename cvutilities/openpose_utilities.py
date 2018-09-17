@@ -237,12 +237,16 @@ class Pose3D:
     def __init__(self, keypoints, valid_keypoints, projection_error=None):
         keypoints = np.asarray(keypoints)
         valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
+        projection_error = np.asarray(projection_error)
         if keypoints.size != num_body_parts*3:
             raise ValueError('Keypoints array does not appear to be of size {}*3'.format(num_body_parts))
         if valid_keypoints.size != num_body_parts:
             raise ValueError('Valid keypoints vector does not appear to be of size {}'.format(num_body_parts))
+        if projection_error.size != 1:
+            raise ValueError('Projection error does not appear to be a scalar'.format(num_body_parts))
         keypoints = keypoints.reshape((num_body_parts, 3))
         valid_keypoints = valid_keypoints.reshape(num_body_parts)
+        projection_error = np.asscalar(projection_error)
         self.keypoints = keypoints
         self.valid_keypoints = valid_keypoints
         self.projection_error = projection_error
