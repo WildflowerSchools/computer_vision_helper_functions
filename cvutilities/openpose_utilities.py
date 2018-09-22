@@ -317,7 +317,7 @@ class Pose3D:
                 projection_error_b)
         return cls(keypoints, common_keypoint_positions_mask, projection_error)
 
-    def draw_pose_3d_topdown(
+    def draw_topdown(
         self,
         pose_tag = None):
         plottable_points = self.keypoints[self.valid_keypoints]
@@ -326,7 +326,7 @@ class Pose3D:
         if pose_tag is not None:
             plt.text(centroid[0], centroid[1], pose_tag)
 
-    def plot_pose_3d_topdown(
+    def plot_topdown(
         self,
         pose_tag = None,
         room_corners = None):
@@ -377,6 +377,9 @@ class Poses3D:
 
     def pose_indices(self):
         return np.asarray(self.pose_graph.edges)
+
+    def poses(self):
+        return [edge[2]['pose'] for edge in list(self.pose_graph.edges.data())]
 
     def keypoints(self):
         return np.array([edge[2]['pose'].keypoints for edge in list(self.pose_graph.edges.data())])
@@ -435,6 +438,27 @@ class Poses3D:
             self.num_cameras,
             self.num_poses)
         return matched_poses
+
+    def draw_topdown(
+        self,
+        pose_tags_2d = None):
+        num_poses = len(self.poses())
+        if pose_tags_2d is None:
+            pose_tags_3d = range(num_poses)
+        else:
+            pose_tags_3d = generate_match_pose_tags(
+                self.pose_indices(),
+                pose_tags_2d)
+        for pose_index in range(num_poses):
+            self.poses()[pose_index].draw_topdown(pose_tags_3d[pose_index])
+
+    def plot_topdown(
+        self,
+        pose_tags_2d = None,
+        room_corners = None):
+        self.draw_topdown(pose_tags_2d)
+        cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
+        plt.show()
 
 def rms_projection_error(
     image_points,
