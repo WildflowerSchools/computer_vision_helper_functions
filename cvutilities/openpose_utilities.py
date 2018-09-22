@@ -317,6 +317,23 @@ class Pose3D:
                 projection_error_b)
         return cls(keypoints, common_keypoint_positions_mask, projection_error)
 
+    def draw_pose_3d_topdown(
+        self,
+        pose_tag = None):
+        plottable_points = self.keypoints[self.valid_keypoints]
+        centroid = np.mean(plottable_points[:, :2], 0)
+        cvutilities.camera_utilities.draw_3d_object_points_topdown(plottable_points)
+        if pose_tag is not None:
+            plt.text(centroid[0], centroid[1], pose_tag)
+
+    def plot_pose_3d_topdown(
+        self,
+        pose_tag = None,
+        room_corners = None):
+        self.draw_pose_3d_topdown(pose_tag)
+        cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
+        plt.show()
+
 class Poses3DTimestep:
     def __init__(
         self,
