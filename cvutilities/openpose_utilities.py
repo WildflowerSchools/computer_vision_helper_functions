@@ -334,7 +334,7 @@ class Pose3D:
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
 
-class Poses3DTimestep:
+class Poses3D:
     def __init__(
         self,
         pose_graph,
@@ -375,13 +375,26 @@ class Poses3DTimestep:
                             pose=pose_3d)
         return cls(pose_graph, num_cameras, num_poses)
 
+    def pose_indices(self):
+        return np.asarray(self.pose_graph.edges)
+
+    def keypoints(self):
+        return np.array([edge[2]['pose'].keypoints for edge in list(self.pose_graph.edges.data())])
+
+    def valid_keypoints(self):
+        return np.array([edge[2]['pose'].valid_keypoints for edge in list(self.pose_graph.edges.data())])
+
+    def projection_errors(self):
+        return np.array([edge[2]['pose'].projection_error for edge in list(self.pose_graph.edges.data())])
+
     def extract_matched_poses(
         self,
         projection_error_threshold = 15.0):
-        # For now, we build a new copy of the graph with just the matched edges.
-        # We should really do this by creating pointers back to the original
-        # graph.
-        matched_graph = nx.Graph()
+        # For now, we initialize a new empty graph and copy selected edges into
+        # it.  We should really do this either by creating a copy of the
+        # original graph and deleting the edges we don't want or by tracking
+        # pointers back to the original graph.
+        pruned_graph = nx.Graph()
         for camera_index_a in range(self.num_cameras - 1):
             for camera_index_b in range(camera_index_a + 1, self.num_cameras):
                 num_poses_a = self.num_poses[camera_index_a]
@@ -402,22 +415,26 @@ class Poses3DTimestep:
                             not np.all(np.isnan(projection_errors[:, pose_index_b])) and
                             np.nanargmin(projection_errors[:, pose_index_b]) == pose_index_a and
                             projection_errors[pose_index_a, pose_index_b] < projection_error_threshold):
-                            matched_graph.add_edge(
+                            pruned_graph.add_edge(
                                 (camera_index_a, pose_index_a),
                                 (camera_index_b, pose_index_b),
                                 pose=self.pose_graph[(camera_index_a, pose_index_a)][(camera_index_b, pose_index_b)]['pose'])
-        # For now, we make a copy of each subgraph. We should really do this by
-        # creating pointers back to the original graph.
-        subgraphs_list = [matched_graph.subgraph(component).copy() for component in nx.connected_components(matched_graph)]
-        matched_poses_3d=[]
-        match_indices_list = []
+        # For now, we initialize a new empty graph, make a copy of each subgraph
+        # of the pruned graph, select the best edge from each subgraph, and copy
+        # that best edge into our new graph. We should really do this  etiher by
+        # deleting all edges from the pruned graph other than the best one for
+        # each subgraph or by tracking pointers back to the pruned graph.
+        matched_poses_graph = nx.Graph()
+        subgraphs_list = [pruned_graph.subgraph(component).copy() for component in nx.connected_components(pruned_graph)]
         for subgraph_index in range(len(subgraphs_list)):
             if nx.number_of_edges(subgraphs_list[subgraph_index]) > 0:
                 best_edge = sorted(subgraphs_list[subgraph_index].edges.data(), key = lambda x: x[2]['pose'].projection_error)[0]
-                matched_poses_3d.append(best_edge[2]['pose'])
-                match_indices_list.append(np.vstack((best_edge[0], best_edge[1])))
-        match_indices = np.asarray(match_indices_list)
-        return matched_poses_3d, match_indices
+                matched_poses_graph.add_edge(best_edge[0], best_edge[1], pose = best_edge[2]['pose'])
+        matched_poses = self.__class__(
+            matched_poses_graph,
+            self.num_cameras,
+            self.num_poses)
+        return matched_poses
 
 def rms_projection_error(
     image_points,
