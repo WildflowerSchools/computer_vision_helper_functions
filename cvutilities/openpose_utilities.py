@@ -375,6 +375,12 @@ class Poses3D:
                             pose=pose_3d)
         return cls(pose_graph, num_cameras, num_poses)
 
+    def num_3d_poses(self):
+        return self.pose_graph.number_of_edges()
+
+    def total_num_2d_poses(self):
+        return self.pose_graph.number_of_nodes()
+
     def pose_indices(self):
         return np.asarray(list(self.pose_graph.edges))
 
@@ -389,6 +395,9 @@ class Poses3D:
 
     def projection_errors(self):
         return np.array([edge[2]['pose'].projection_error for edge in list(self.pose_graph.edges.data())])
+
+    def draw_graph(self):
+        nx.draw(self.pose_graph, with_labels=True, font_weight='bold')
 
     def extract_matched_poses(
         self,
