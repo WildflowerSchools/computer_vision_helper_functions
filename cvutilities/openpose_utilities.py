@@ -338,11 +338,11 @@ class Poses3D:
     def __init__(
         self,
         pose_graph,
-        num_cameras,
-        num_poses):
+        num_cameras_source_images,
+        num_2d_poses_source_images):
         self.pose_graph = pose_graph
-        self.num_cameras = num_cameras
-        self.num_poses = num_poses
+        self.num_cameras_source_images = num_cameras_source_images
+        self.num_2d_poses_source_images = num_2d_poses_source_images
 
     @classmethod
     def from_poses_2d_timestep(
@@ -350,14 +350,14 @@ class Poses3D:
         poses_2d,
         cameras):
         pose_graph = nx.Graph()
-        num_cameras = poses_2d.num_cameras
-        num_poses = np.zeros(num_cameras, dtype=int)
-        for camera_index_a in range(num_cameras - 1):
-            for camera_index_b in range(camera_index_a + 1, num_cameras):
+        num_cameras_source_images = poses_2d.num_cameras
+        num_2d_poses_source_images = np.zeros(num_cameras_source_images, dtype=int)
+        for camera_index_a in range(num_cameras_source_images - 1):
+            for camera_index_b in range(camera_index_a + 1, num_cameras_source_images):
                 num_poses_a = poses_2d.cameras[camera_index_a].num_poses
                 num_poses_b = poses_2d.cameras[camera_index_b].num_poses
-                num_poses[camera_index_a] = num_poses_a
-                num_poses[camera_index_b] = num_poses_b
+                num_2d_poses_source_images[camera_index_a] = num_poses_a
+                num_2d_poses_source_images[camera_index_b] = num_poses_b
                 for pose_index_a in range(num_poses_a):
                     for pose_index_b in range(num_poses_b):
                         pose_3d = Pose3D.from_poses_2d(
@@ -373,7 +373,7 @@ class Poses3D:
                             (camera_index_a, pose_index_a),
                             (camera_index_b, pose_index_b),
                             pose=pose_3d)
-        return cls(pose_graph, num_cameras, num_poses)
+        return cls(pose_graph, num_cameras_source_images, num_2d_poses_source_images)
 
     def num_3d_poses(self):
         return self.pose_graph.number_of_edges()
@@ -407,10 +407,10 @@ class Poses3D:
         # original graph and deleting the edges we don't want or by tracking
         # pointers back to the original graph.
         pruned_graph = nx.Graph()
-        for camera_index_a in range(self.num_cameras - 1):
-            for camera_index_b in range(camera_index_a + 1, self.num_cameras):
-                num_poses_a = self.num_poses[camera_index_a]
-                num_poses_b = self.num_poses[camera_index_b]
+        for camera_index_a in range(self.num_cameras_source_images - 1):
+            for camera_index_b in range(camera_index_a + 1, self.num_cameras_source_images):
+                num_poses_a = self.num_2d_poses_source_images[camera_index_a]
+                num_poses_b = self.num_2d_poses_source_images[camera_index_b]
                 # For each pair of cameras, we build an array of projection errors
                 # because it's easier to express our matching rule as a rule on an array
                 # rather than a rule on the graph.
@@ -444,8 +444,8 @@ class Poses3D:
                 matched_poses_graph.add_edge(best_edge[0], best_edge[1], pose = best_edge[2]['pose'])
         matched_poses = self.__class__(
             matched_poses_graph,
-            self.num_cameras,
-            self.num_poses)
+            self.num_cameras_source_images,
+            self.num_2d_poses_source_images)
         return matched_poses
 
     def draw_topdown(
