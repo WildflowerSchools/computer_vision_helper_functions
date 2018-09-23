@@ -306,7 +306,7 @@ class Pose3D:
             image_points_b,
             image_points_b_reconstructed)
         object_points = object_points.reshape((-1, 3))
-        keypoints = populate_array(
+        keypoints = restore_all_keypoints(
             object_points,
             common_keypoint_positions_mask)
         if np.isnan(projection_error_a) or np.isnan(projection_error_b):
@@ -492,16 +492,16 @@ def extract_common_keypoints(
     common_keypoint_positions_mask = np.logical_and(
         pose_a.valid_keypoints,
         pose_b.valid_keypoints)
-    image_points_a = pose_a.keypoints[common_keypoint_positions_mask]
-    image_points_b = pose_b.keypoints[common_keypoint_positions_mask]
-    return image_points_a, image_points_b, common_keypoint_positions_mask
+    common_keypoints_a = pose_a.keypoints[common_keypoint_positions_mask]
+    common_keypoints_b = pose_b.keypoints[common_keypoint_positions_mask]
+    return common_keypoints_a, common_keypoints_b, common_keypoint_positions_mask
 
-def populate_array(
-    partial_array,
-    mask):
-    partial_array = np.asarray(partial_array)
-    mask = np.asarray(mask)
-    array_dims = [len(mask)] + list(partial_array.shape[1:])
-    array = np.full(array_dims, np.nan)
-    array[mask] = partial_array
-    return array
+def restore_all_keypoints(
+    common_keypoints,
+    common_keypoint_positions_mask):
+    common_keypoints = np.asarray(common_keypoints)
+    common_keypoint_positions_mask = np.asarray(common_keypoint_positions_mask)
+    all_keypoints_dims = [len(common_keypoint_positions_mask)] + list(common_keypoints.shape[1:])
+    all_keypoints = np.full(all_keypoints_dims, np.nan)
+    all_keypoints[common_keypoint_positions_mask] = common_keypoints
+    return all_keypoints
