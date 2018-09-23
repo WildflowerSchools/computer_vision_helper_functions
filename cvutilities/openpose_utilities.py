@@ -452,12 +452,15 @@ class Poses3D:
         self,
         pose_tags_2d = None):
         num_poses = len(self.poses())
+        pose_indices = self.pose_indices()
         if pose_tags_2d is None:
             pose_tags_3d = range(num_poses)
         else:
-            pose_tags_3d = generate_match_pose_tags(
-                self.pose_indices(),
-                pose_tags_2d)
+            pose_tags_3d = []
+            for match_index in range(pose_indices.shape[0]):
+                pose_tags_3d.append('{},{}'.format(
+                    pose_tags_2d[pose_indices[match_index, 0, 0]][pose_indices[match_index, 0, 1]],
+                    pose_tags_2d[pose_indices[match_index, 1, 0]][pose_indices[match_index, 1, 1]]))
         for pose_index in range(num_poses):
             self.poses()[pose_index].draw_topdown(pose_tags_3d[pose_index])
 
@@ -502,13 +505,3 @@ def populate_array(
     array = np.full(array_dims, np.nan)
     array[mask] = partial_array
     return array
-
-def generate_match_pose_tags(
-    match_indices,
-    pose_tags_multiple_cameras):
-    match_pose_tags = []
-    for match_index in range(match_indices.shape[0]):
-        match_pose_tags.append('{},{}'.format(
-            pose_tags_multiple_cameras[match_indices[match_index, 0, 0]][match_indices[match_index, 0, 1]],
-            pose_tags_multiple_cameras[match_indices[match_index, 1, 0]][match_indices[match_index, 1, 1]]))
-    return match_pose_tags
