@@ -4,27 +4,29 @@ import numpy as np
 import json
 
 
-classroom_name = 'camera-sandbox'
+classroom_name = 'sandbox'
 datetime = np.datetime64('2018-07-04T18:23:00')
 camera_names = ['camera01', 'camera02', 'camera03', 'camera04']
 
 camera_calibration_data_all_cameras = cvutilities.camera_utilities.fetch_camera_calibration_data_from_local_drive_multiple_cameras(
     camera_names)
 
-openpose_data_all_cameras = cvutilities.openpose_utilities.fetch_openpose_data_from_s3_multiple_cameras(
-    classroom_name,
-    datetime,
-    camera_names)
+all_2d_poses = cvutilities.openpose_utilities.Poses2DTimestep.from_openpose_timestep_wildflower_s3(
+        classroom_name,
+        camera_names,
+        datetime)
 
-matched_poses_3d, matched_projection_errors, match_indices = cvutilities.openpose_utilities.calculate_matched_poses_3d_multiple_cameras(
-    openpose_data_all_cameras,
+all_3d_poses = cvutilities.openpose_utilities.Poses3D.from_poses_2d_timestep(
+    all_2d_poses,
     camera_calibration_data_all_cameras)
 
-print('\nMatched poses:')
-print(matched_poses_3d)
+matched_3d_poses = all_3d_poses.extract_matched_poses()
 
-print('\nProjection errors:')
-print(matched_projection_errors)
+print('\nMatched pose keypoints:')
+print(matched_3d_poses.keypoints())
+
+print('\nMatched pose projection errors:')
+print(matched_3d_poses.projection_errors())
 
 print('\nMatch indices:')
-print(match_indices)
+print(matched_3d_poses.pose_indices())
