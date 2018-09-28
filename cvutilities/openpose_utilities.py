@@ -463,20 +463,19 @@ class Poses3D:
     def draw_graph(self):
         nx.draw(self.pose_graph, with_labels=True, font_weight='bold')
 
-    # Scan through all of the 3D poses in a collection and pull out a set of
-    # best matches, one for each person in the room
-    def extract_matched_poses(
+    # Starting with a collection of 3D poses representing all possible matches,
+    # for each camera pair, pull out the best match for each 2D pose across that
+    # pair, with the contraint that (1) If pose A is the best match for pose B
+    # then pose B must be the best match for pose A, and (2) The reprojection
+    # error has to be below a threshold
+    def extract_likely_matches_from_all_matches(
         self,
         projection_error_threshold = 15.0):
-        # First, for each camera pair, we pull out the best match for each 2D
-        # pose across that pair, with the contraint that (1) If pose A is the
-        # best match for pose B then pose B must be the best match for pose A,
-        # and (2) The reprojection error has to be below a threshold. For now,
-        # we initialize a new empty graph and copy selected edges into it. We
-        # should really do this either by creating a copy of the original graph
-        # and deleting the edges we don't want or by tracking pointers back to
-        # the original graph
-        pruned_graph = nx.Graph()
+        # For now, we initialize a new empty graph and copy selected edges into
+        # it. We should really do this either by creating a copy of the original
+        # graph and deleting the edges we don't want or by tracking pointers
+        # back to the original graph
+        likely_matches_graph = nx.Graph()
         for camera_index_a in range(self.num_cameras_source_images - 1):
             for camera_index_b in range(camera_index_a + 1, self.num_cameras_source_images):
                 num_poses_a = self.num_2d_poses_source_images[camera_index_a]
@@ -497,29 +496,48 @@ class Poses3D:
                             not np.all(np.isnan(projection_errors[:, pose_index_b])) and
                             np.nanargmin(projection_errors[:, pose_index_b]) == pose_index_a and
                             projection_errors[pose_index_a, pose_index_b] < projection_error_threshold):
-                            pruned_graph.add_edge(
+                            likely_matches_graph.add_edge(
                                 (camera_index_a, pose_index_a),
                                 (camera_index_b, pose_index_b),
                                 pose=self.pose_graph[(camera_index_a, pose_index_a)][(camera_index_b, pose_index_b)]['pose'])
-        # Second, for each connected subgraph (which now represents a set of
-        # poses connected across camera pairs that ought to be the same person),
-        # we extract the match with the lowest reprojection error (we could
-        # average instead). For now, we make a copy of each subgraph of the
-        # pruned graph, select the best edge from each subgraph, and copy that
-        # best edge into a new graph. We should really do this either by
-        # deleting all edges from the pruned graph other than the best one for
-        # each subgraph or by tracking pointers back to the pruned graph
-        matched_poses_graph = nx.Graph()
-        subgraphs_list = [pruned_graph.subgraph(component).copy() for component in nx.connected_components(pruned_graph)]
+        likely_matches = self.__class__(
+            likely_matches_graph,
+            self.num_cameras_source_images,
+            self.num_2d_poses_source_images)
+        return likely_matches
+
+    # Starting with a collection of 3D poses representing likely matches, for
+    # each connected subgraph (which now represents a set of poses connected
+    # across camera pairs that ought to be the same person), we extract the
+    # match with the lowest reprojection error (we could average instead).
+    def extract_best_matches_from_likely_matches(
+        self):
+        # For now, we make a copy of each subgraph of the likely matches, select
+        # the best edge from each subgraph, and copy that best edge into a new
+        # graph. We should really do this either by deleting all edges from the
+        # pruned graph other than the best one for each subgraph or by tracking
+        # pointers back to the original graph
+        best_matches_graph = nx.Graph()
+        subgraphs_list = [self.pose_graph.subgraph(component).copy() for component in nx.connected_components(self.pose_graph)]
         for subgraph_index in range(len(subgraphs_list)):
             if nx.number_of_edges(subgraphs_list[subgraph_index]) > 0:
                 best_edge = sorted(subgraphs_list[subgraph_index].edges.data(), key = lambda x: x[2]['pose'].projection_error)[0]
-                matched_poses_graph.add_edge(best_edge[0], best_edge[1], pose = best_edge[2]['pose'])
-        matched_poses = self.__class__(
-            matched_poses_graph,
+                best_matches_graph.add_edge(best_edge[0], best_edge[1], pose = best_edge[2]['pose'])
+        best_matches = self.__class__(
+            best_matches_graph,
             self.num_cameras_source_images,
             self.num_2d_poses_source_images)
-        return matched_poses
+        return best_matches
+
+    # Starting with a collection of 3D poses representing all possible matches,
+    # scan through all of the 3D poses and pull out a set of best matches, one
+    # for each person in the room (combines the two methods above)
+    def extract_matched_poses(
+        self,
+        projection_error_threshold = 15.0):
+        likely_matches = self.extract_likely_matches_from_all_matches(projection_error_threshold)
+        best_matches = likely_matches.extract_best_matches_from_likely_matches()
+        return best_matches
 
     # Draw the poses onto a chart representing a top-down view of the room. We
     # separate this from the plotting function below because we might want to
