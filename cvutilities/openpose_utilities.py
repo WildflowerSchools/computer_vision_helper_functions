@@ -92,7 +92,8 @@ class Pose2D:
         self,
         keypoints,
         confidence_scores,
-        valid_keypoints):
+        valid_keypoints,
+        tag = None):
         keypoints = np.asarray(keypoints)
         confidence_scores = np.asarray(confidence_scores)
         valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
@@ -108,9 +109,7 @@ class Pose2D:
         self.keypoints = keypoints
         self.confidence_scores = confidence_scores
         self.valid_keypoints = valid_keypoints
-        # For now, to avoid repeating our error-checking code, we don't allow
-        # tag setting from this constructor
-        self.tag = None
+        self.tag = tag
 
     # Pull the pose data from a dictionary with the same structure as the
     # correponding OpenPose output JSON string
@@ -137,11 +136,6 @@ class Pose2D:
         self,
         tag):
         self.tag = tag
-
-    # Get tag (provided here to maintain parallelism with classes holding
-    # multiple poses)
-    def get_tag(self):
-        return self.tag
 
     # Draw the pose onto a chart with the dimensions of the origin image. We
     # separate this from the plotting function below because we might want to
@@ -182,10 +176,6 @@ class Poses2DCamera:
         self,
         poses):
         self.poses = poses
-        self.num_poses = len(poses)
-        # For now, to avoid repeating our error-checking code, we don't allow
-        # tag setting from this constructor
-        self.tags = None
 
     # Pull the pose data from a dictionary with the same structure as the
     # correponding OpenPose output JSON file
@@ -238,20 +228,36 @@ class Poses2DCamera:
         self,
         tags):
         num_tags = len(tags)
-        if num_tags != self.num_poses:
+        if num_tags != self.num_poses():
             raise ValueError('Length of tag list does not match number of poses')
         for tag_index in range(num_tags):
             self.poses[tag_index].tag = tags[tag_index]
 
-    # Get pose tags
-    def get_tags(self):
-        return [pose.get_tag() for pose in self.poses]
+    # Return number of poses
+    def num_poses(self):
+        return len(self.poses)
+
+    # Return keypoints
+    def keypoints(self):
+        return[pose.keypoints for pose in self.poses]
+
+    # Return confidence_scores
+    def confidence_scores(self):
+        return[pose.confidence_scores for pose in self.poses]
+
+    # Return valid keypoints
+    def valid_keypoints(self):
+        return[pose.valid_keypoints for pose in self.poses]
+
+    # Return pose tags
+    def tags(self):
+        return [pose.tag for pose in self.poses]
 
     # Draw the poses onto a chart with the dimensions of the origin image. We
     # separate this from the plotting function below because we might want to
     # draw other elements before formatting and showing the chart
     def draw(self):
-        num_poses = self.num_poses
+        num_poses = self.num_poses()
         for pose_index in range(num_poses):
             self.poses[pose_index].draw()
 
@@ -271,11 +277,6 @@ class Poses2DTimestep:
         self,
         cameras):
         self.cameras = cameras
-        self.num_cameras = len(cameras)
-        # For now, to avoid repeating our error-checking code, we don't allow
-        # tag setting from this constructor
-        self.tags = None
-
 
     # Pull the pose data from a set of OpenPose output JSON files stored on S3
     # and specified by classroom name, a list of camera names, and date-time
@@ -300,20 +301,40 @@ class Poses2DTimestep:
         self,
         tag_lists):
         num_tag_lists = len(tag_lists)
-        if num_tag_lists != self.num_cameras:
+        if num_tag_lists != self.num_cameras():
             raise ValueError('Number of tag lists does not match number of cameras')
         for tag_list_index in range(num_tag_lists):
             self.cameras[tag_list_index].set_tags(tag_lists[tag_list_index])
 
-    # (et pose tags
-    def get_tags(self):
-        return[camera.get_tags() for camera in self.cameras]
+    # Return number of cameras
+    def num_cameras(self):
+        return len(self.cameras)
+
+    # Return number of poses for each camera
+    def num_poses(self):
+        return [camera.num_poses() for camera in self.cameras]
+
+    # Return keypoints
+    def keypoints(self):
+        return[camera.keypoints() for camera in self.cameras]
+
+    # Return confidence_scores
+    def confidence_scores(self):
+        return[camera.confidence_scores() for camera in self.cameras]
+
+    # Return valid keypoints
+    def valid_keypoints(self):
+        return[camera.valid_keypoints() for camera in self.cameras]
+
+    # Return pose tags
+    def tags(self):
+        return[camera.tags() for camera in self.cameras]
 
     # Plot the poses onto a set of charts, one for each source camera view.
     def plot(
         self,
         image_size=[1296, 972]):
-        num_cameras = self.num_cameras
+        num_cameras = self.num_cameras()
         for camera_index in range(num_cameras):
             self.cameras[camera_index].plot(image_size)
 
@@ -447,12 +468,12 @@ class Poses3D:
         poses_2d,
         cameras):
         pose_graph = nx.Graph()
-        num_cameras_source_images = poses_2d.num_cameras
+        num_cameras_source_images = poses_2d.num_cameras()
         num_2d_poses_source_images = np.zeros(num_cameras_source_images, dtype=int)
         for camera_index_a in range(num_cameras_source_images - 1):
             for camera_index_b in range(camera_index_a + 1, num_cameras_source_images):
-                num_poses_a = poses_2d.cameras[camera_index_a].num_poses
-                num_poses_b = poses_2d.cameras[camera_index_b].num_poses
+                num_poses_a = poses_2d.cameras[camera_index_a].num_poses()
+                num_poses_b = poses_2d.cameras[camera_index_b].num_poses()
                 num_2d_poses_source_images[camera_index_a] = num_poses_a
                 num_2d_poses_source_images[camera_index_b] = num_poses_b
                 for pose_index_a in range(num_poses_a):
