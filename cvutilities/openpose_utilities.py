@@ -88,7 +88,11 @@ body_part_connectors = [
 
 # Class to hold the data for a single 2D pose
 class Pose2D:
-    def __init__(self, keypoints, confidence_scores, valid_keypoints):
+    def __init__(
+        self,
+        keypoints,
+        confidence_scores,
+        valid_keypoints):
         keypoints = np.asarray(keypoints)
         confidence_scores = np.asarray(confidence_scores)
         valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
@@ -104,6 +108,9 @@ class Pose2D:
         self.keypoints = keypoints
         self.confidence_scores = confidence_scores
         self.valid_keypoints = valid_keypoints
+        # For now, to avoid repeating our error-checking code, we don't allow
+        # tag setting from this constructor
+        self.tag = None
 
     # Pull the pose data from a dictionary with the same structure as the
     # correponding OpenPose output JSON string
@@ -124,13 +131,23 @@ class Pose2D:
         json_data = json.loads(json_string)
         return cls.from_openpose_person_json_data(json_data)
 
+    # Set tag (provided here to maintain parallelism with classes holding
+    # multiple poses)
+    def set_tag(
+        self,
+        tag):
+        self.tag = tag
+
+    # Get tag (provided here to maintain parallelism with classes holding
+    # multiple poses)
+    def get_tag(self):
+        return self.tag
+
     # Draw the pose onto a chart with the dimensions of the origin image. We
     # separate this from the plotting function below because we might want to
     # draw several poses or other elements before formatting and showing the
     # chart.
-    def draw(
-        self,
-        pose_tag = None):
+    def draw(self):
         all_points = self.keypoints
         valid_keypoints = self.valid_keypoints
         plottable_points = all_points[valid_keypoints]
@@ -145,7 +162,8 @@ class Pose2D:
                     [all_points[body_part_from_index,1],all_points[body_part_to_index, 1]],
                     'k-',
                     alpha = 0.2)
-        plt.text(centroid[0], centroid[1], pose_tag)
+        if self.tag is not None:
+            plt.text(centroid[0], centroid[1], self.tag)
 
     # Plot a pose onto a chart with the dimensions of the origin image. Calls
     # the drawing function above, adds formating, and shows the plot.
@@ -160,9 +178,14 @@ class Pose2D:
 # Class to hold the data from a collection of 2D poses corresponding to a single
 # camera image
 class Poses2DCamera:
-    def __init__(self, poses):
+    def __init__(
+        self,
+        poses):
         self.poses = poses
         self.num_poses = len(poses)
+        # For now, to avoid repeating our error-checking code, we don't allow
+        # tag setting from this constructor
+        self.tags = None
 
     # Pull the pose data from a dictionary with the same structure as the
     # correponding OpenPose output JSON file
@@ -210,34 +233,49 @@ class Poses2DCamera:
             datetime)
         return cls.from_openpose_output_s3_object(s3_bucket_name, s3_object_name)
 
+    # Set pose tags
+    def set_tags(
+        self,
+        tags):
+        num_tags = len(tags)
+        if num_tags != self.num_poses:
+            raise ValueError('Length of tag list does not match number of poses')
+        for tag_index in range(num_tags):
+            self.poses[tag_index].tag = tags[tag_index]
+
+    # Get pose tags
+    def get_tags(self):
+        return [pose.get_tag() for pose in self.poses]
+
     # Draw the poses onto a chart with the dimensions of the origin image. We
     # separate this from the plotting function below because we might want to
     # draw other elements before formatting and showing the chart
-    def draw(
-        self,
-        pose_tags = None):
+    def draw(self):
         num_poses = self.num_poses
-        if pose_tags is None:
-            pose_tags = range(num_poses)
         for pose_index in range(num_poses):
-            self.poses[pose_index].draw(pose_tags[pose_index])
+            self.poses[pose_index].draw()
 
     # Plot the poses onto a chart with the dimensions of the origin image. Calls
     # the drawing function above, adds formating, and shows the plot
     def plot(
         self,
-        pose_tags = None,
         image_size=[1296, 972]):
-        self.draw(pose_tags)
+        self.draw()
         cvutilities.camera_utilities.format_2d_image_plot(image_size)
         plt.show()
 
 # Class to hold the data from a collection of 2D poses from multiple cameras at
 # a single timestep
 class Poses2DTimestep:
-    def __init__(self, cameras):
+    def __init__(
+        self,
+        cameras):
         self.cameras = cameras
         self.num_cameras = len(cameras)
+        # For now, to avoid repeating our error-checking code, we don't allow
+        # tag setting from this constructor
+        self.tags = None
+
 
     # Pull the pose data from a set of OpenPose output JSON files stored on S3
     # and specified by classroom name, a list of camera names, and date-time
@@ -257,20 +295,27 @@ class Poses2DTimestep:
             cameras.append(Poses2DCamera.from_openpose_output_s3_object(s3_bucket_name, s3_object_name))
         return cls(cameras)
 
+    # Set pose tags
+    def set_tags(
+        self,
+        tag_lists):
+        num_tag_lists = len(tag_lists)
+        if num_tag_lists != self.num_cameras:
+            raise ValueError('Number of tag lists does not match number of cameras')
+        for tag_list_index in range(num_tag_lists):
+            self.cameras[tag_list_index].set_tags(tag_lists[tag_list_index])
+
+    # (et pose tags
+    def get_tags(self):
+        return[camera.get_tags() for camera in self.cameras]
+
     # Plot the poses onto a set of charts, one for each source camera view.
     def plot(
         self,
-        pose_tags = None,
         image_size=[1296, 972]):
         num_cameras = self.num_cameras
         for camera_index in range(num_cameras):
-            if pose_tags is None:
-                pose_tags_single_camera = None
-            else:
-                pose_tags_single_camera = pose_tags[camera_index]
-            self.cameras[camera_index].plot(
-                pose_tags_single_camera,
-                image_size)
+            self.cameras[camera_index].plot(image_size)
 
 # Class to hold the data for a single 3D pose
 class Pose3D:
