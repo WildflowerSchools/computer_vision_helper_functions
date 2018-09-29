@@ -486,7 +486,10 @@ class Poses3D:
                 projection_errors = np.full((num_poses_a, num_poses_b), np.nan)
                 for pose_index_a in range(num_poses_a):
                     for pose_index_b in range(num_poses_b):
-                        projection_errors[pose_index_a, pose_index_b] = self.pose_graph[(camera_index_a, pose_index_a)][(camera_index_b, pose_index_b)]['pose'].projection_error
+                        if self.pose_graph.has_edge(
+                            (camera_index_a, pose_index_a),
+                            (camera_index_b, pose_index_b)):
+                            projection_errors[pose_index_a, pose_index_b] = self.pose_graph[(camera_index_a, pose_index_a)][(camera_index_b, pose_index_b)]['pose'].projection_error
                 # Apply our matching rule to the array of projection errors.
                 for pose_index_a in range(num_poses_a):
                     for pose_index_b in range(num_poses_b):
