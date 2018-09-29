@@ -340,7 +340,12 @@ class Poses2DTimestep:
 
 # Class to hold the data for a single 3D pose
 class Pose3D:
-    def __init__(self, keypoints, valid_keypoints, projection_error=None):
+    def __init__(
+        self,
+        keypoints,
+        valid_keypoints,
+        projection_error = None,
+        tag = None):
         keypoints = np.asarray(keypoints)
         valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
         projection_error = np.asarray(projection_error)
@@ -356,6 +361,7 @@ class Pose3D:
         self.keypoints = keypoints
         self.valid_keypoints = valid_keypoints
         self.projection_error = projection_error
+        self.tag = tag
 
     # Calculate a 3D pose by triangulating between two 2D poses from two
     # different cameras
@@ -423,28 +429,35 @@ class Pose3D:
             projection_error = max(
                 projection_error_a,
                 projection_error_b)
-        return cls(keypoints, common_keypoint_positions_mask, projection_error)
+        if pose_2d_a.tag is None and pose_2d_b.tag is None:
+            tag = None
+        elif pose_2d_a.tag == pose_2d_b.tag:
+            tag = pose_2d_a.tag
+        else:
+            tag = '{}/{}'.format(pose_2d_a.tag, pose_2d_b.tag)
+        return cls(
+            keypoints,
+            common_keypoint_positions_mask,
+            projection_error,
+            tag)
 
     # Draw the pose onto a chart representing a top-down view of the room. We
     # separate this from the plotting function below because we might want to
     # draw several poses or other elements before formatting and showing the
     # chart
-    def draw_topdown(
-        self,
-        pose_tag = None):
+    def draw_topdown(self):
         plottable_points = self.keypoints[self.valid_keypoints]
         centroid = np.mean(plottable_points[:, :2], 0)
         cvutilities.camera_utilities.draw_3d_object_points_topdown(plottable_points)
-        if pose_tag is not None:
-            plt.text(centroid[0], centroid[1], pose_tag)
+        if self.tag is not None:
+            plt.text(centroid[0], centroid[1], self.tag)
 
     # Plot a pose onto a chart representing a top-down view of the room. Calls
     # the drawing function above, adds formating, and shows the plot
     def plot_topdown(
         self,
-        pose_tag = None,
         room_corners = None):
-        self.draw_pose_3d_topdown(pose_tag)
+        self.draw_pose_3d_topdown()
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
 
@@ -523,6 +536,10 @@ class Poses3D:
     # Return the projection errors for all of the 3D poses in the collection.
     def projection_errors(self):
         return np.array([edge[2]['pose'].projection_error for edge in list(self.pose_graph.edges.data())])
+
+    # Return the tags for all of the 3D poses in the collection.
+    def tags(self):
+        return [edge[2]['pose'].tag for edge in list(self.pose_graph.edges.data())]
 
     # Draw the graph representing all of the 3D poses in the collection (2D
     # poses as nodes, 3D poses as edges)
@@ -611,29 +628,18 @@ class Poses3D:
     # Draw the poses onto a chart representing a top-down view of the room. We
     # separate this from the plotting function below because we might want to
     # draw other elements before formatting and showing the chart
-    def draw_topdown(
-        self,
-        pose_tags_2d = None):
+    def draw_topdown(self):
         num_poses = len(self.poses())
         pose_indices = self.pose_indices()
-        if pose_tags_2d is None:
-            pose_tags_3d = range(num_poses)
-        else:
-            pose_tags_3d = []
-            for match_index in range(pose_indices.shape[0]):
-                pose_tags_3d.append('{},{}'.format(
-                    pose_tags_2d[pose_indices[match_index, 0, 0]][pose_indices[match_index, 0, 1]],
-                    pose_tags_2d[pose_indices[match_index, 1, 0]][pose_indices[match_index, 1, 1]]))
         for pose_index in range(num_poses):
-            self.poses()[pose_index].draw_topdown(pose_tags_3d[pose_index])
+            self.poses()[pose_index].draw_topdown()
 
     # Plot the poses onto a chart representing a top-down view of the room.
     # Calls the drawing function above, adds formating, and shows the plot
     def plot_topdown(
         self,
-        pose_tags_2d = None,
         room_corners = None):
-        self.draw_topdown(pose_tags_2d)
+        self.draw_topdown()
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
 
