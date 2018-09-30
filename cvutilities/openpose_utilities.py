@@ -130,8 +130,9 @@ class Pose2D:
         json_data = json.loads(json_string)
         return cls.from_openpose_person_json_data(json_data)
 
-    # Set tag (provided here to maintain parallelism with classes holding
-    # multiple poses)
+    # Set tag (we provide a function for this stay consistent with the other
+    # classes; users of these classes should never have to call the base
+    # constructor)
     def set_tag(
         self,
         tag):
@@ -169,38 +170,39 @@ class Pose2D:
         cvutilities.camera_utilities.format_2d_image_plot(image_size)
         plt.show()
 
-# Class to hold the data from a collection of 2D poses corresponding to a single
-# camera image
-class Poses2DCamera:
+# Class to hold the data from a collection of 2D poses. Internal structure is a
+# list of lists of 2DPose objects (multiple cameras, multiple poses per camera)
+class Poses2D:
     def __init__(
         self,
         poses):
         self.poses = poses
 
-    # Pull the pose data from a dictionary with the same structure as the
-    # correponding OpenPose output JSON file
+    # Pull the pose data for a single camera from a dictionary with the same
+    # structure as the correponding OpenPose output JSON file
     @classmethod
     def from_openpose_output_json_data(cls, json_data):
         people_json_data = json_data[openpose_people_list_name]
-        poses = [Pose2D.from_openpose_person_json_data(person_json_data) for person_json_data in people_json_data]
+        poses = [[Pose2D.from_openpose_person_json_data(person_json_data) for person_json_data in people_json_data]]
         return cls(poses)
 
-    # Pull the pose data from a string containing the contents of an OpenPose
-    # output JSON file
+    # Pull the pose data for a single camera from a string containing the
+    # contents of an OpenPose output JSON file
     @classmethod
     def from_openpose_output_json_string(cls, json_string):
         json_data = json.loads(json_string)
         return cls.from_openpose_output_json_data(json_data)
 
-    # Pull the pose data from a local OpenPose output JSON file
+    # Pull the pose data for a single camera from a local OpenPose output JSON
+    # file
     @classmethod
     def from_openpose_output_json_file(cls, json_file_path):
         with open(json_file_path) as json_file:
             json_data = json.load(json_file)
         return cls.from_openpose_output_json_data(json_data)
 
-    # Pull the pose data from an OpenPose output JSON file stored in a specified
-    # location on S3
+    # Pull the pose data for a single camera from an OpenPose output JSON file
+    # stored on S3 and specified by S3 object name
     @classmethod
     def from_openpose_output_s3_object(cls, s3_bucket_name, s3_object_name):
         s3_object = boto3.resource('s3').Object(s3_bucket_name, s3_object_name)
@@ -208,8 +210,8 @@ class Poses2DCamera:
         json_data = json.loads(s3_object_content)
         return cls.from_openpose_output_json_data(json_data)
 
-    # Pull the pose data from an OpenPose output JSON file stored on S3 and
-    # specified by classroom name, camera name, and date-time
+    # Pull the pose data for a single camera from an OpenPose output JSON file
+    # stored on S3 and specified by classroom name, camera name, and date-time
     @classmethod
     def from_openpose_output_wildflower_s3(
         cls,
@@ -223,63 +225,9 @@ class Poses2DCamera:
             datetime)
         return cls.from_openpose_output_s3_object(s3_bucket_name, s3_object_name)
 
-    # Set pose tags
-    def set_tags(
-        self,
-        tags):
-        num_tags = len(tags)
-        if num_tags != self.num_poses():
-            raise ValueError('Length of tag list does not match number of poses')
-        for tag_index in range(num_tags):
-            self.poses[tag_index].tag = tags[tag_index]
-
-    # Return number of poses
-    def num_poses(self):
-        return len(self.poses)
-
-    # Return keypoints
-    def keypoints(self):
-        return[pose.keypoints for pose in self.poses]
-
-    # Return confidence_scores
-    def confidence_scores(self):
-        return[pose.confidence_scores for pose in self.poses]
-
-    # Return valid keypoints
-    def valid_keypoints(self):
-        return[pose.valid_keypoints for pose in self.poses]
-
-    # Return pose tags
-    def tags(self):
-        return [pose.tag for pose in self.poses]
-
-    # Draw the poses onto a chart with the dimensions of the origin image. We
-    # separate this from the plotting function below because we might want to
-    # draw other elements before formatting and showing the chart
-    def draw(self):
-        num_poses = self.num_poses()
-        for pose_index in range(num_poses):
-            self.poses[pose_index].draw()
-
-    # Plot the poses onto a chart with the dimensions of the origin image. Calls
-    # the drawing function above, adds formating, and shows the plot
-    def plot(
-        self,
-        image_size=[1296, 972]):
-        self.draw()
-        cvutilities.camera_utilities.format_2d_image_plot(image_size)
-        plt.show()
-
-# Class to hold the data from a collection of 2D poses from multiple cameras at
-# a single timestep
-class Poses2DTimestep:
-    def __init__(
-        self,
-        cameras):
-        self.cameras = cameras
-
-    # Pull the pose data from a set of OpenPose output JSON files stored on S3
-    # and specified by classroom name, a list of camera names, and date-time
+    # Pull the pose data for a set of cameras at a single timestep from a set of
+    # OpenPose output JSON files stored on S3 and specified by classroom name, a
+    # list of camera names, and date-time
     @classmethod
     def from_openpose_timestep_wildflower_s3(
         cls,
@@ -287,14 +235,15 @@ class Poses2DTimestep:
         camera_names,
         datetime):
         s3_bucket_name = classroom_data_wildflower_s3_bucket_name
-        cameras = []
+        poses = []
         for camera_name in camera_names:
             s3_object_name = generate_pose_2d_wildflower_s3_object_name(
                 classroom_name,
                 camera_name,
                 datetime)
-            cameras.append(Poses2DCamera.from_openpose_output_s3_object(s3_bucket_name, s3_object_name))
-        return cls(cameras)
+            camera = Poses2D.from_openpose_output_s3_object(s3_bucket_name, s3_object_name)
+            poses.append(camera.poses[0])
+        return cls(poses)
 
     # Set pose tags
     def set_tags(
@@ -304,31 +253,35 @@ class Poses2DTimestep:
         if num_tag_lists != self.num_cameras():
             raise ValueError('Number of tag lists does not match number of cameras')
         for tag_list_index in range(num_tag_lists):
-            self.cameras[tag_list_index].set_tags(tag_lists[tag_list_index])
+            num_tags = len(tag_lists[tag_list_index])
+            if num_tags != self.num_poses()[tag_list_index]:
+                raise ValueError('Length of tag list does not match number of poses')
+            for tag_index in range(num_tags):
+                self.poses[tag_list_index][tag_index].tag = tag_lists[tag_list_index][tag_index]
 
     # Return number of cameras
     def num_cameras(self):
-        return len(self.cameras)
+        return len(self.poses)
 
     # Return number of poses for each camera
     def num_poses(self):
-        return [camera.num_poses() for camera in self.cameras]
+        return [len(camera) for camera in self.poses]
 
     # Return keypoints
     def keypoints(self):
-        return[camera.keypoints() for camera in self.cameras]
+        return [[pose.keypoints for pose in camera] for camera in self.poses]
 
     # Return confidence_scores
     def confidence_scores(self):
-        return[camera.confidence_scores() for camera in self.cameras]
+        return [[pose.confidence_scores for pose in camera] for camera in self.poses]
 
     # Return valid keypoints
     def valid_keypoints(self):
-        return[camera.valid_keypoints() for camera in self.cameras]
+        return [[pose.valid_keypoints for pose in camera] for camera in self.poses]
 
     # Return pose tags
     def tags(self):
-        return[camera.tags() for camera in self.cameras]
+        return [[pose.tag for pose in camera] for camera in self.poses]
 
     # Plot the poses onto a set of charts, one for each source camera view.
     def plot(
@@ -336,7 +289,11 @@ class Poses2DTimestep:
         image_size=[1296, 972]):
         num_cameras = self.num_cameras()
         for camera_index in range(num_cameras):
-            self.cameras[camera_index].plot(image_size)
+            num_poses = self.num_poses()[camera_index]
+            for pose_index in range(num_poses):
+                self.poses[camera_index][pose_index].draw()
+            cvutilities.camera_utilities.format_2d_image_plot(image_size)
+            plt.show()
 
 # Class to hold the data for a single 3D pose
 class Pose3D:
@@ -482,18 +439,16 @@ class Poses3D:
         cameras):
         pose_graph = nx.Graph()
         num_cameras_source_images = poses_2d.num_cameras()
-        num_2d_poses_source_images = np.zeros(num_cameras_source_images, dtype=int)
+        num_2d_poses_source_images = poses_2d.num_poses()
         for camera_index_a in range(num_cameras_source_images - 1):
             for camera_index_b in range(camera_index_a + 1, num_cameras_source_images):
-                num_poses_a = poses_2d.cameras[camera_index_a].num_poses()
-                num_poses_b = poses_2d.cameras[camera_index_b].num_poses()
-                num_2d_poses_source_images[camera_index_a] = num_poses_a
-                num_2d_poses_source_images[camera_index_b] = num_poses_b
+                num_poses_a = poses_2d.num_poses()[camera_index_a]
+                num_poses_b = poses_2d.num_poses()[camera_index_b]
                 for pose_index_a in range(num_poses_a):
                     for pose_index_b in range(num_poses_b):
                         pose_3d = Pose3D.from_poses_2d(
-                            poses_2d.cameras[camera_index_a].poses[pose_index_a],
-                            poses_2d.cameras[camera_index_b].poses[pose_index_b],
+                            poses_2d.poses[camera_index_a][pose_index_a],
+                            poses_2d.poses[camera_index_b][pose_index_b],
                             cameras[camera_index_a]['rotation_vector'],
                             cameras[camera_index_a]['translation_vector'],
                             cameras[camera_index_b]['rotation_vector'],
