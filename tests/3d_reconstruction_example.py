@@ -11,7 +11,7 @@ camera_names = ['camera01', 'camera02', 'camera03', 'camera04']
 camera_calibration_data_all_cameras = cvutilities.camera_utilities.fetch_camera_calibration_data_from_local_drive_multiple_cameras(
     camera_names)
 
-all_2d_poses = cvutilities.openpose_utilities.Poses2DTimestep.from_openpose_timestep_wildflower_s3(
+all_2d_poses = cvutilities.openpose_utilities.Poses2D.from_openpose_timestep_wildflower_s3(
         classroom_name,
         camera_names,
         datetime)
