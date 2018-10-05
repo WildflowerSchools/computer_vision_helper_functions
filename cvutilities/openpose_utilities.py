@@ -398,6 +398,27 @@ class Pose3D:
             projection_error,
             tag)
 
+    # Given a set of camera calibration parameters, project this 3D pose into
+    # the camera coordinate system to produce a 2D pose
+    def to_pose_2d(
+        self,
+        camera):
+        keypoints_2d = cvutilities.camera_utilities.project_points(
+            self.keypoints,
+            camera['rotation_vector'],
+            camera['translation_vector'],
+            camera['camera_matrix'],
+            camera['distortion_coefficients'])
+        valid_keypoints_2d =  self.valid_keypoints
+        confidence_scores_2d = np.repeat(np.nan, num_body_parts)
+        tag_2d = self.tag
+        pose_2d = Pose2D(
+            keypoints_2d,
+            confidence_scores_2d,
+            valid_keypoints_2d,
+            tag_2d)
+        return pose_2d
+
     # Draw the pose onto a chart representing a top-down view of the room. We
     # separate this from the plotting function below because we might want to
     # draw several poses or other elements before formatting and showing the
@@ -498,32 +519,20 @@ class Poses3D:
     def tags(self):
         return [edge[2]['pose'].tag for edge in list(self.pose_graph.edges.data())]
 
+    # Using the camera calibration parameters from the original source images,
+    # project this collection of 3D poses back into the coordinate system for
+    # each camera to produce a collection of 2D poses
     def to_poses_2d(self):
         if self.source_cameras is None:
             raise ValueError('Source camera calibration data not specified')
         num_3d_poses = self.num_3d_poses()
-        keypoints_3d = self.keypoints()
-        valid_keypoints_3d = self.valid_keypoints()
-        tags = self.tags()
         cameras=[]
         for camera_index in range(self.num_cameras_source_images):
             poses = []
             if num_3d_poses > 0:
                 for pose_index_3d in range(num_3d_poses):
-                    keypoints_2d = cvutilities.camera_utilities.project_points(
-                        keypoints_3d[pose_index_3d],
-                        self.source_cameras[camera_index]['rotation_vector'],
-                        self.source_cameras[camera_index]['translation_vector'],
-                        self.source_cameras[camera_index]['camera_matrix'],
-                        self.source_cameras[camera_index]['distortion_coefficients'])
-                    valid_keypoints_2d =  valid_keypoints_3d[pose_index_3d]
-                    confidence_scores_2d = np.repeat(np.nan, num_body_parts)
-                    tag_2d = tags[pose_index_3d]
-                    poses.append(Pose2D(
-                        keypoints_2d,
-                        confidence_scores_2d,
-                        valid_keypoints_2d,
-                        tag_2d))
+                    pose_2d = self.poses()[pose_index_3d].to_pose_2d(self.source_cameras[camera_index])
+                    poses.append(pose_2d)
             cameras.append(poses)
         return Poses2D(cameras)
 
