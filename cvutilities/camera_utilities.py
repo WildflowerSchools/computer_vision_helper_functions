@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
+# import matplotlib.image as mpimg
 import scipy.optimize
 import json
 import os
@@ -31,6 +32,15 @@ def fetch_camera_calibration_data_from_local_drive_multiple_cameras(
                 camera_name,
                 camera_calibration_data_directory))
     return camera_calibration_data_multiple_cameras
+
+def fetch_image_from_local_drive(image_path):
+    image = cv.imread(image_path)
+    return image
+
+def draw_image(
+    image,
+    alpha = 0.4):
+    plt.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB), alpha = alpha)
 
 def compose_transformations(
     rotation_vector_1,
