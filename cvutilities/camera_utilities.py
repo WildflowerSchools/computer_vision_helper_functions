@@ -1,10 +1,47 @@
+import cvutilities.datetime_utilities
 import cv2 as cv
 import numpy as np
 import matplotlib.pyplot as plt
 # import matplotlib.image as mpimg
 import scipy.optimize
+import boto3
 import json
 import os
+import io
+
+# For now, the Wildflower-specific functionality is intermingled with the more
+# general S3 functionality. We should probably separate these at some point. For
+# the S3 functions to work, the environment must include AWS_ACCESS_KEY_ID and
+# AWS_SECRET_ACCESS_KEY variables and that access key must have read permissions
+# for the relevant buckets. You can set these environment variables manually or
+# by using the AWS CLI.
+classroom_data_wildflower_s3_bucket_name = 'wf-classroom-data'
+camera_image_wildflower_s3_directory_name = 'camera'
+
+# Generate the S3 object name for a camera image from a classroom name, a camera
+# name, and a date-time (according to our current naming conventions)
+def generate_camera_image_wildflower_s3_object_name(
+    classroom_name,
+    camera_name,
+    datetime):
+    date_string, time_string = generate_wildflower_s3_datetime_strings(datetime)
+    camera_image_wildflower_s3_object_name = 'camera-{}/{}/{}/{}/still_{}-{}.jpg'.format(
+        classroom_name,
+        camera_image_wildflower_s3_directory_name,
+        date_string,
+        camera_name,
+        date_string,
+        time_string)
+    return camera_image_wildflower_s3_object_name
+
+# Generate date and time strings as they appear in our S3 object names from a
+# date-time (according to our current conventions)
+def generate_wildflower_s3_datetime_strings(
+    datetime):
+    datetime_native_utc_naive = cvutilities.datetime_utilities.convert_to_native_utc_naive(datetime)
+    date_string = datetime_native_utc_naive.strftime('%Y-%m-%d')
+    time_string = datetime_native_utc_naive.strftime('%H-%M-%S')
+    return date_string, time_string
 
 def fetch_camera_calibration_data_from_local_drive_single_camera(
     camera_name,
@@ -33,14 +70,64 @@ def fetch_camera_calibration_data_from_local_drive_multiple_cameras(
                 camera_calibration_data_directory))
     return camera_calibration_data_multiple_cameras
 
+# Fetch an image from a local image file and return it in OpenCV format
 def fetch_image_from_local_drive(image_path):
     image = cv.imread(image_path)
     return image
 
-def draw_image(
+# Fetch a camera image stored on S3 and specified by S3 object name and return
+# it in OpenCV format. I could not for the life of me figure out how to fetch a
+# JPEG image from S3 directly into memory. In particular, I couldn't figure out
+# how to translate the type and encoding of the incoming stream into the type
+# and encoding expected by cv.imdecode(). This is my temporary workaround. Need
+# to fix this. This breaks if temporary_image_directory doesn't exist. Not
+# bothering to handle this case because I want to get rid of the file download
+# entirely
+temporary_image_directory = '.'
+temporary_image_filename = 'temporary_image'
+temporary_image_path = os.path.join(
+    temporary_image_directory,
+    temporary_image_filename)
+def fetch_image_from_s3_object(s3_bucket_name, s3_object_name):
+    s3_object = boto3.resource('s3').Object(s3_bucket_name, s3_object_name)
+    s3_object.download_file(temporary_image_path)
+    image = cv.imread(temporary_image_path)
+    os.remove(temporary_image_path)
+    return image
+
+# Fetch a camera image stored on S3 and specified by classroom name, camera
+# name, and date-time and return it in OpenCV format
+def fetch_image_from_wildflower_s3(
+    classroom_name,
+    camera_name,
+    datetime):
+    s3_bucket_name = classroom_data_wildflower_s3_bucket_name
+    s3_object_name = generate_camera_image_wildflower_s3_object_name(
+        classroom_name,
+        camera_name,
+        datetime)
+    image = fetch_image_from_s3_object(s3_bucket_name, s3_object_name)
+    return image
+
+# Take an image in OpenCV format and draw it as a background for a Matplotlib
+# plot. We separate this from the plotting function below because we might want
+# to draw other elements before formatting and showing the chart.
+def draw_background_image(
     image,
     alpha = 0.4):
     plt.imshow(cv.cvtColor(image, cv.COLOR_BGR2RGB), alpha = alpha)
+
+# Take an image in OpenCV format and plot it. Calls the drawing function above,
+# adds formating, and shows the plot.
+def plot_background_image(
+    image,
+    alpha = 0.4):
+    image_size=np.array([
+        image.shape[1],
+        image.shape[0]])
+    draw_background_image(image, alpha)
+    format_2d_image_plot(image_size)
+    plt.show()
 
 def compose_transformations(
     rotation_vector_1,
