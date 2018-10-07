@@ -339,6 +339,8 @@ class Poses2D:
             num_poses = self.num_poses()[camera_index]
             for pose_index in range(num_poses):
                 self.poses[camera_index][pose_index].draw()
+            if self.source_images is not None:
+                cvutilities.camera_utilities.draw_background_image(self.source_images[camera_index])
             cvutilities.camera_utilities.format_2d_image_plot(image_size)
             plt.show()
 
