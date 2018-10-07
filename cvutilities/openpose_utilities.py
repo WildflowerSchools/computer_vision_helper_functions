@@ -175,40 +175,63 @@ class Pose2D:
 class Poses2D:
     def __init__(
         self,
-        poses):
+        poses,
+        source_images = None):
         self.poses = poses
+        self.source_images = source_images
 
     # Pull the pose data for a single camera from a dictionary with the same
     # structure as the correponding OpenPose output JSON file
     @classmethod
-    def from_openpose_output_json_data(cls, json_data):
+    def from_openpose_output_json_data(
+        cls,
+        json_data,
+        source_images = None):
         people_json_data = json_data[openpose_people_list_name]
         poses = [[Pose2D.from_openpose_person_json_data(person_json_data) for person_json_data in people_json_data]]
-        return cls(poses)
+        return cls(
+            poses,
+            source_images)
 
     # Pull the pose data for a single camera from a string containing the
     # contents of an OpenPose output JSON file
     @classmethod
-    def from_openpose_output_json_string(cls, json_string):
+    def from_openpose_output_json_string(
+        cls,
+        json_string,
+        source_images = None):
         json_data = json.loads(json_string)
-        return cls.from_openpose_output_json_data(json_data)
+        return cls.from_openpose_output_json_data(
+            json_data,
+            source_images)
 
     # Pull the pose data for a single camera from a local OpenPose output JSON
     # file
     @classmethod
-    def from_openpose_output_json_file(cls, json_file_path):
+    def from_openpose_output_json_file(
+        cls,
+        json_file_path,
+        source_images = None):
         with open(json_file_path) as json_file:
             json_data = json.load(json_file)
-        return cls.from_openpose_output_json_data(json_data)
+        return cls.from_openpose_output_json_data(
+            json_data,
+            source_images)
 
     # Pull the pose data for a single camera from an OpenPose output JSON file
     # stored on S3 and specified by S3 object name
     @classmethod
-    def from_openpose_output_s3_object(cls, s3_bucket_name, s3_object_name):
+    def from_openpose_output_s3_object(
+        cls,
+        s3_bucket_name,
+        s3_object_name,
+        source_images = None):
         s3_object = boto3.resource('s3').Object(s3_bucket_name, s3_object_name)
         s3_object_content = s3_object.get()['Body'].read().decode('utf-8')
         json_data = json.loads(s3_object_content)
-        return cls.from_openpose_output_json_data(json_data)
+        return cls.from_openpose_output_json_data(
+            json_data,
+            source_images)
 
     # Pull the pose data for a single camera from an OpenPose output JSON file
     # stored on S3 and specified by classroom name, camera name, and date-time
@@ -217,13 +240,24 @@ class Poses2D:
         cls,
         classroom_name,
         camera_name,
-        datetime):
+        datetime,
+        fetch_source_image = False):
         s3_bucket_name = classroom_data_wildflower_s3_bucket_name
         s3_object_name = generate_pose_2d_wildflower_s3_object_name(
             classroom_name,
             camera_name,
             datetime)
-        return cls.from_openpose_output_s3_object(s3_bucket_name, s3_object_name)
+        if fetch_source_image:
+            source_images = [cvutilities.camera_utilities.fetch_image_from_wildflower_s3(
+                classroom_name,
+                camera_name,
+                datetime)]
+        else:
+            source_images = None
+        return cls.from_openpose_output_s3_object(
+            s3_bucket_name,
+            s3_object_name,
+            source_images)
 
     # Pull the pose data for a set of cameras at a single timestep from a set of
     # OpenPose output JSON files stored on S3 and specified by classroom name, a
@@ -233,7 +267,8 @@ class Poses2D:
         cls,
         classroom_name,
         camera_names,
-        datetime):
+        datetime,
+        fetch_source_images = False):
         s3_bucket_name = classroom_data_wildflower_s3_bucket_name
         poses = []
         for camera_name in camera_names:
@@ -243,7 +278,19 @@ class Poses2D:
                 datetime)
             camera = Poses2D.from_openpose_output_s3_object(s3_bucket_name, s3_object_name)
             poses.append(camera.poses[0])
-        return cls(poses)
+        if fetch_source_images:
+            source_images = []
+            for camera_name in camera_names:
+                source_image = cvutilities.camera_utilities.fetch_image_from_wildflower_s3(
+                    classroom_name,
+                    camera_name,
+                    datetime)
+                source_images.append(source_image)
+        else:
+            source_images = None
+        return cls(
+            poses,
+            source_images)
 
     # Set pose tags
     def set_tags(
