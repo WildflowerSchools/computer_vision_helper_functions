@@ -496,11 +496,13 @@ class Poses3D:
         pose_graph,
         num_cameras_source_images,
         num_2d_poses_source_images,
-        source_cameras = None):
+        source_cameras = None,
+        source_images = None):
         self.pose_graph = pose_graph
         self.num_cameras_source_images = num_cameras_source_images
         self.num_2d_poses_source_images = num_2d_poses_source_images
         self.source_cameras = source_cameras
+        self.source_images = source_images
 
     # Calculate all possible 3D poses at a single time step (from every pair of
     # 2D poses across every pair of cameras)
@@ -512,6 +514,7 @@ class Poses3D:
         pose_graph = nx.Graph()
         num_cameras_source_images = poses_2d.num_cameras()
         num_2d_poses_source_images = poses_2d.num_poses()
+        source_images = poses_2d.source_images
         for camera_index_a in range(num_cameras_source_images - 1):
             for camera_index_b in range(camera_index_a + 1, num_cameras_source_images):
                 num_poses_a = poses_2d.num_poses()[camera_index_a]
@@ -531,7 +534,12 @@ class Poses3D:
                             (camera_index_a, pose_index_a),
                             (camera_index_b, pose_index_b),
                             pose=pose_3d)
-        return cls(pose_graph, num_cameras_source_images, num_2d_poses_source_images, cameras)
+        return cls(
+            pose_graph,
+            num_cameras_source_images,
+            num_2d_poses_source_images,
+            cameras,
+            source_images)
 
     # Return the number of 3D poses (edges) in the collection
     def num_3d_poses(self):
@@ -583,7 +591,7 @@ class Poses3D:
                     pose_2d = self.poses()[pose_index_3d].to_pose_2d(self.source_cameras[camera_index])
                     poses.append(pose_2d)
             cameras.append(poses)
-        return Poses2D(cameras)
+        return Poses2D(cameras, self.source_images)
 
     # Draw the graph representing all of the 3D poses in the collection (2D
     # poses as nodes, 3D poses as edges)
@@ -634,7 +642,8 @@ class Poses3D:
             likely_matches_graph,
             self.num_cameras_source_images,
             self.num_2d_poses_source_images,
-            self.source_cameras)
+            self.source_cameras,
+            self.source_images)
         return likely_matches
 
     # Starting with a collection of 3D poses representing likely matches, for
@@ -658,7 +667,8 @@ class Poses3D:
             best_matches_graph,
             self.num_cameras_source_images,
             self.num_2d_poses_source_images,
-            self.source_cameras)
+            self.source_cameras,
+            self.source_images)
         return best_matches
 
     # Starting with a collection of 3D poses representing all possible matches,
