@@ -146,7 +146,6 @@ class Pose2D:
         all_points = self.keypoints
         valid_keypoints = self.valid_keypoints
         plottable_points = all_points[valid_keypoints]
-        centroid = np.mean(plottable_points, 0)
         cvutilities.camera_utilities.draw_2d_image_points(plottable_points)
         for body_part_connector in body_part_connectors:
             body_part_from_index = body_part_connector[0]
@@ -157,8 +156,6 @@ class Pose2D:
                     [all_points[body_part_from_index,1],all_points[body_part_to_index, 1]],
                     'k-',
                     alpha = 0.2)
-        if self.tag is not None:
-            plt.text(centroid[0], centroid[1], self.tag)
 
     # Plot a pose onto a chart with the dimensions of the origin image. Calls
     # the drawing function above, adds formating, and shows the plot.
@@ -166,7 +163,7 @@ class Pose2D:
         self,
         pose_tag = None,
         image_size=[1296, 972]):
-        self.draw_pose_2d(pose_tag)
+        self.draw()
         cvutilities.camera_utilities.format_2d_image_plot(image_size)
         plt.show()
 
@@ -338,7 +335,17 @@ class Poses2D:
         for camera_index in range(num_cameras):
             num_poses = self.num_poses()[camera_index]
             for pose_index in range(num_poses):
-                self.poses[camera_index][pose_index].draw()
+                pose = self.poses[camera_index][pose_index]
+                pose.draw()
+                if pose.tag is not None:
+                    tag = pose.tag
+                else:
+                    tag = pose_index
+                all_points = pose.keypoints
+                valid_keypoints = pose.valid_keypoints
+                plottable_points = all_points[valid_keypoints]
+                centroid = np.mean(plottable_points, 0)
+                plt.text(centroid[0], centroid[1], tag)
             if self.source_images is not None:
                 cvutilities.camera_utilities.draw_background_image(self.source_images[camera_index])
             cvutilities.camera_utilities.format_2d_image_plot(image_size)
@@ -589,6 +596,8 @@ class Poses3D:
             if num_3d_poses > 0:
                 for pose_index_3d in range(num_3d_poses):
                     pose_2d = self.poses()[pose_index_3d].to_pose_2d(self.source_cameras[camera_index])
+                    if pose_2d.tag is None:
+                        pose_2d.set_tag(pose_index_3d)
                     poses.append(pose_2d)
             cameras.append(poses)
         return Poses2D(cameras, self.source_images)
