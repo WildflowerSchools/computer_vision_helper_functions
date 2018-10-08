@@ -6,7 +6,6 @@ import scipy.optimize
 import boto3
 import json
 import os
-import io
 
 # For now, the Wildflower-specific S3 functionality is intermingled with the more
 # general S3 functionality. We should probably separate these at some point. For
