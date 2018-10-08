@@ -333,6 +333,14 @@ class Poses2D:
         image_size = [1296, 972]):
         num_cameras = self.num_cameras()
         for camera_index in range(num_cameras):
+            if self.source_images is not None:
+                source_image = self.source_images[camera_index]
+                cvutilities.camera_utilities.draw_background_image(source_image)
+                current_image_size = np.array([
+                    source_image.shape[1],
+                    source_image.shape[0]])
+            else:
+                current_image_size = image_size
             num_poses = self.num_poses()[camera_index]
             for pose_index in range(num_poses):
                 pose = self.poses[camera_index][pose_index]
@@ -345,15 +353,8 @@ class Poses2D:
                 valid_keypoints = pose.valid_keypoints
                 plottable_points = all_points[valid_keypoints]
                 centroid = np.mean(plottable_points, 0)
-                plt.text(centroid[0], centroid[1], tag)
-            if self.source_images is not None:
-                source_image = self.source_images[camera_index]
-                cvutilities.camera_utilities.draw_background_image(source_image)
-                current_image_size = np.array([
-                    source_image.shape[1],
-                    source_image.shape[0]])
-            else:
-                current_image_size = image_size
+                if centroid[0] > 0 and centroid[0] < current_image_size[0] and centroid[1] > 0 and centroid[1] < current_image_size[1]:
+                    plt.text(centroid[0], centroid[1], tag)
             cvutilities.camera_utilities.format_2d_image_plot(current_image_size)
             plt.show()
 
