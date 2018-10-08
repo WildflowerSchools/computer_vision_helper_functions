@@ -330,7 +330,7 @@ class Poses2D:
     # Plot the poses onto a set of charts, one for each source camera view.
     def plot(
         self,
-        image_size=[1296, 972]):
+        image_size = [1296, 972]):
         num_cameras = self.num_cameras()
         for camera_index in range(num_cameras):
             num_poses = self.num_poses()[camera_index]
@@ -347,8 +347,14 @@ class Poses2D:
                 centroid = np.mean(plottable_points, 0)
                 plt.text(centroid[0], centroid[1], tag)
             if self.source_images is not None:
-                cvutilities.camera_utilities.draw_background_image(self.source_images[camera_index])
-            cvutilities.camera_utilities.format_2d_image_plot(image_size)
+                source_image = self.source_images[camera_index]
+                cvutilities.camera_utilities.draw_background_image(source_image)
+                current_image_size = np.array([
+                    source_image.shape[1],
+                    source_image.shape[0]])
+            else:
+                current_image_size = image_size
+            cvutilities.camera_utilities.format_2d_image_plot(current_image_size)
             plt.show()
 
 # Class to hold the data for a single 3D pose
