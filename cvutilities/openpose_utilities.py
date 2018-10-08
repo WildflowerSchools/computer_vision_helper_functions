@@ -481,17 +481,17 @@ class Pose3D:
     # chart
     def draw_topdown(self):
         plottable_points = self.keypoints[self.valid_keypoints]
-        centroid = np.mean(plottable_points[:, :2], 0)
+        # centroid = np.mean(plottable_points[:, :2], 0)
         cvutilities.camera_utilities.draw_3d_object_points_topdown(plottable_points)
-        if self.tag is not None:
-            plt.text(centroid[0], centroid[1], self.tag)
+        # if self.tag is not None:
+        #     plt.text(centroid[0], centroid[1], self.tag)
 
     # Plot a pose onto a chart representing a top-down view of the room. Calls
     # the drawing function above, adds formating, and shows the plot
     def plot_topdown(
         self,
         room_corners = None):
-        self.draw_pose_3d_topdown()
+        self.draw_topdown()
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
 
@@ -697,8 +697,16 @@ class Poses3D:
         num_poses = len(self.poses())
         pose_indices = self.pose_indices()
         for pose_index in range(num_poses):
-            self.poses()[pose_index].draw_topdown()
-
+            pose = self.poses()[pose_index]
+            pose.draw_topdown()
+            if pose.tag is not None:
+                tag = pose.tag
+            else:
+                tag = pose_index
+            plottable_points = pose.keypoints[pose.valid_keypoints]
+            centroid = np.mean(plottable_points[:, :2], 0)
+            plt.text(centroid[0], centroid[1], tag)
+        
     # Plot the poses onto a chart representing a top-down view of the room.
     # Calls the drawing function above, adds formating, and shows the plot
     def plot_topdown(
