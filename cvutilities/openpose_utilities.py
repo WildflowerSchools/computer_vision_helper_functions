@@ -1,22 +1,22 @@
 import cvutilities.camera_utilities
 import cvutilities.datetime_utilities
 import boto3
-import networkx as nx # We use graph structures to hold the 3D pose data
+import networkx as nx # We use NetworkX graph structures to hold the 3D pose data
 import numpy as np
 import matplotlib.pyplot as plt
 import json
 
-# For now, the Wildflower-specific functionality is intermingled with the more
+# For now, the Wildflower-specific S3 functionality is intermingled with the more
 # general S3 functionality. We should probably separate these at some point. For
-# the S3 functions to work, the environment must include AWS_ACCESS_KEY_ID and
+# the S3 functions below to work, the environment must include AWS_ACCESS_KEY_ID and
 # AWS_SECRET_ACCESS_KEY variables and that access key must have read permissions
 # for the relevant buckets. You can set these environment variables manually or
 # by using the AWS CLI.
 classroom_data_wildflower_s3_bucket_name = 'wf-classroom-data'
 pose_2d_data_wildflower_s3_directory_name = '2D-pose'
 
-# Generate the S3 object name for a 2D pose file from a classroom name, a camera
-# name, and a date-time (according to our current naming conventions)
+# Generate the Wildflower S3 object name for a 2D pose file from a classroom
+# name, a camera name, and a Python datetime object
 def generate_pose_2d_wildflower_s3_object_name(
     classroom_name,
     camera_name,
@@ -31,8 +31,8 @@ def generate_pose_2d_wildflower_s3_object_name(
         time_string)
     return pose_2d_wildflower_s3_object_name
 
-# Generate date and time strings as they appear in our S3 object names from a
-# date-time (according to our current conventions)
+# Generate date and time strings (as they appear in our Wildflower S3 object
+# names) from a Python datetime object
 def generate_wildflower_s3_datetime_strings(
     datetime):
     datetime_native_utc_naive = cvutilities.datetime_utilities.convert_to_native_utc_naive(datetime)
@@ -42,7 +42,7 @@ def generate_wildflower_s3_datetime_strings(
 
 # For now, the OpenPose-specific functionality is intermingled with the more
 # general pose analysis functionality. We should probably separate these at some
-# point. The parameters below correspond to the OpenPose output we've been
+# point. The parameters below correspond to the OpenPose output that we've been
 # generating but the newest OpenPose version changes these (more body parts,
 # 'pose_keypoints_2d' instead of 'pose_keypoints', etc.)
 openpose_people_list_name = 'people'
@@ -130,16 +130,16 @@ class Pose2D:
         json_data = json.loads(json_string)
         return cls.from_openpose_person_json_data(json_data)
 
-    # Set tag (we provide a function for this stay consistent with the other
-    # classes; users of these classes should never have to call the base
-    # constructor)
+    # Set tag (we provide a function for this to stay consistent with the other
+    # classes and with the princple that users of these classes should never
+    # have to call the base constructor)
     def set_tag(
         self,
         tag):
         self.tag = tag
 
-    # Draw the pose onto a chart with the dimensions of the origin image. We
-    # separate this from the plotting function below because we might want to
+    # Draw the pose onto a chart with the coordinate system of the origin image.
+    # We separate this from the plotting function below because we might want to
     # draw several poses or other elements before formatting and showing the
     # chart.
     def draw(self):
@@ -157,8 +157,8 @@ class Pose2D:
                     'k-',
                     alpha = 0.2)
 
-    # Plot a pose onto a chart with the dimensions of the origin image. Calls
-    # the drawing function above, adds formating, and shows the plot.
+    # Plot a pose onto a chart with the coordinate system of the origin image.
+    # Calls the drawing function above, adds formating, and shows the plot.
     def plot(
         self,
         pose_tag = None,
@@ -169,6 +169,7 @@ class Pose2D:
 
 # Class to hold the data from a collection of 2D poses. Internal structure is a
 # list of lists of 2DPose objects (multiple cameras, multiple poses per camera)
+# and (possibly) a list of source images (multiple cameras)
 class Poses2D:
     def __init__(
         self,
@@ -216,7 +217,7 @@ class Poses2D:
             source_images)
 
     # Pull the pose data for a single camera from an OpenPose output JSON file
-    # stored on S3 and specified by S3 object name
+    # stored on S3 and specified by S3 bucket and object names
     @classmethod
     def from_openpose_output_s3_object(
         cls,
@@ -231,7 +232,8 @@ class Poses2D:
             source_images)
 
     # Pull the pose data for a single camera from an OpenPose output JSON file
-    # stored on S3 and specified by classroom name, camera name, and date-time
+    # stored on S3 and specified by classroom name, camera name, and a Python
+    # datetime object
     @classmethod
     def from_openpose_output_wildflower_s3(
         cls,
@@ -256,9 +258,9 @@ class Poses2D:
             s3_object_name,
             source_images)
 
-    # Pull the pose data for a set of cameras at a single timestep from a set of
-    # OpenPose output JSON files stored on S3 and specified by classroom name, a
-    # list of camera names, and date-time
+    # Pull the pose data for multiple cameras at a single moment in time from a
+    # set of OpenPose output JSON files stored on S3 and specified by classroom
+    # name, a list of camera names, and a Python datetime object
     @classmethod
     def from_openpose_timestep_wildflower_s3(
         cls,
@@ -482,7 +484,7 @@ class Pose3D:
             tag_2d)
         return pose_2d
 
-    # Draw the pose onto a chart representing a top-down view of the room. We
+    # Draw the 3D pose onto a chart representing a top-down view of the room. We
     # separate this from the plotting function below because we might want to
     # draw several poses or other elements before formatting and showing the
     # chart
@@ -499,8 +501,8 @@ class Pose3D:
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
 
-# Class to hold the data for a colection of 3D poses reconstructed from 2D poses
-# across multiple cameras at a single timestep
+# Class to hold the data for a collection of 3D poses reconstructed from 2D
+# poses across multiple cameras at a single moment in time
 class Poses3D:
     def __init__(
         self,
@@ -515,8 +517,8 @@ class Poses3D:
         self.source_cameras = source_cameras
         self.source_images = source_images
 
-    # Calculate all possible 3D poses at a single time step (from every pair of
-    # 2D poses across every pair of cameras)
+    # Calculate all possible 3D poses at a single moment in time (from every
+    # pair of 2D poses across every pair of cameras)
     @classmethod
     def from_poses_2d_timestep(
         cls,
@@ -612,7 +614,7 @@ class Poses3D:
         nx.draw(self.pose_graph, with_labels=True, font_weight='bold')
 
     # Starting with a collection of 3D poses representing all possible matches,
-    # for each camera pair, pull out the best match for each 2D pose across that
+    # for each camera pair, pull out the best match for each 2D pose across each
     # pair, with the contraint that (1) If pose A is the best match for pose B
     # then pose B must be the best match for pose A, and (2) The reprojection
     # error has to be below a threshold
