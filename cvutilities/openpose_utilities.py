@@ -1,5 +1,6 @@
 import cvutilities.camera_utilities
 import cvutilities.datetime_utilities
+import smc_kalman
 import boto3
 import networkx as nx # We use NetworkX graph structures to hold the 3D pose data
 import numpy as np
@@ -721,6 +722,110 @@ class Poses3D:
         self.draw_topdown()
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
+
+# Class to hold the data for a set of Gaussian distributions describing a 3D
+# pose (one three-dimensional Gaussian distribution describing the position and
+# velocity of each body part). Internal structure is a list of
+# smc_kalman.GaussianDistribution objects
+class Pose3DDistribution:
+    def __init__(
+        self,
+        keypoint_distributions,
+        tag = None):
+        if len(keypoint_distributions) != num_body_parts:
+            raise ValueError('List of keypoint distributions is not of length {}'.format(num_body_parts))
+        self.keypoint_distributions = keypoint_distributions
+        self.tag = tag
+
+    # Initialize a 3D pose distribution
+    @classmethod
+    def initialize(
+        cls,
+        keypoint_position_means,
+        keypoint_velocity_means,
+        keypoint_position_error,
+        keypoint_velocity_error,
+        tag = None):
+        keypoint_position_means = np.asarray(keypoint_position_means)
+        keypoint_velocity_means = np.asarray(keypoint_velocity_means)
+        keypoint_position_error = np.asarray(keypoint_position_error)
+        keypoint_velocity_error = np.asarray(keypoint_velocity_error)
+        if keypoint_position_means.shape != (num_body_parts, 3):
+            raise ValueError('Initial position means array does not appear to be of shape ({}, 3)'.format(num_body_parts))
+        if keypoint_velocity_means.shape != (num_body_parts, 3):
+            raise ValueError('Initial velocity means array does not appear to be of shape ({}, 3)'.format(num_body_parts))
+        if keypoint_position_error.size != 1:
+            raise ValueError('Initial position error does not appear to be a scalar'.format(num_body_parts))
+        if keypoint_velocity_error.size != 1:
+            raise ValueError('Initial velocity error does not appear to be a scalar'.format(num_body_parts))
+        keypoint_position_error = np.asscalar(keypoint_position_error)
+        keypoint_velocity_error = np.asscalar(keypoint_velocity_error)
+        keypoint_covariance = np.diagflat(
+            np.concatenate((
+                np.repeat(keypoint_position_error,3),
+                np.repeat(keypoint_velocity_error, 3))))
+        keypoint_distributions=[]
+        for body_part_index in range(num_body_parts):
+            keypoint_mean = np.concatenate((keypoint_position_means[body_part_index], keypoint_velocity_means[body_part_index]))
+            keypoint_distribution = smc_kalman.GaussianDistribution(
+                keypoint_mean,
+                keypoint_covariance)
+            keypoint_distributions.append(keypoint_distribution)
+        return cls(
+            keypoint_distributions,
+            tag)
+
+    # Return keypoint means
+    def keypoint_means(self):
+        return np.asarray([keypoint_distribution.mean for keypoint_distribution in self.keypoint_distributions])
+
+    # Return keypoint covariances()
+    def keypoint_covariances(self):
+        return np.asarray([keypoint_distribution.covariance for keypoint_distribution in self.keypoint_distributions])
+
+    # Return keypoint position means
+    def keypoint_position_means(self):
+        return self.keypoint_means()[:, :3]
+
+    # Return keypoint position means
+    def keypoint_velocity_means(self):
+        return self.keypoint_means()[:, 3:]
+
+    # Return keypoint standard deviations
+    def keypoint_std_devs(self):
+        return np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance) for keypoint_distribution in self.keypoint_distributions]))
+
+    # Return keypoint position standard deviations
+    def keypoint_position_std_devs(self):
+        return self.keypoint_std_devs()[:, :3]
+
+    # Return keypoint position standard deviations
+    def keypoint_velocity_std_devs(self):
+        return self.keypoint_std_devs()[:, 3:]
+
+# Linear Gaussian sequential Monte Carlo model for the position and velocity of
+# a single keypoint
+def keypoint_model(delta_t, position_measurement_error):
+    transition_model = np.array([
+        [1.0, 0.0, 0.0, delta_t, 0.0, 0.0]
+        [0.0, 1.0, 0.0, 0.0, delta_t, 0.0]
+        [0.0, 0.0, 1.0, 0.0, 0.0, delta_t]
+        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]])
+    transition_noise_covariance = np.zeros((6,6))
+    measurement_model = np.array([
+        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        [0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0]])
+    measurement_noise_covariance = position_measurement_error*np.identity(3)
+    control_model = None
+    return smc_kalman.LinearGaussianModel(
+        transition_model,
+        transition_noise_covariance,
+        measurement_model,
+        measurement_noise_covariance,
+        control_model)
 
 # Calculate the reprojection error between two sets of corresponding 2D points.
 # Used above in evaluating potential 3D poses
