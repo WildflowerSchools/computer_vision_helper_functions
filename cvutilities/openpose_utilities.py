@@ -737,7 +737,7 @@ class Pose3DDistribution:
         self.keypoint_distributions = keypoint_distributions
         self.tag = tag
 
-    # Initialize a 3D pose distribution
+    # Initialize the distributions
     @classmethod
     def initialize(
         cls,
@@ -762,8 +762,8 @@ class Pose3DDistribution:
         keypoint_velocity_error = np.asscalar(keypoint_velocity_error)
         keypoint_covariance = np.diagflat(
             np.concatenate((
-                np.repeat(keypoint_position_error,3),
-                np.repeat(keypoint_velocity_error, 3))))
+                np.repeat(keypoint_position_error**2,3),
+                np.repeat(keypoint_velocity_error**2, 3))))
         keypoint_distributions=[]
         for body_part_index in range(num_body_parts):
             keypoint_mean = np.concatenate((keypoint_position_means[body_part_index], keypoint_velocity_means[body_part_index]))
@@ -803,29 +803,89 @@ class Pose3DDistribution:
     def keypoint_velocity_std_devs(self):
         return self.keypoint_std_devs()[:, 3:]
 
-# Linear Gaussian sequential Monte Carlo model for the position and velocity of
-# a single keypoint
-def keypoint_model(delta_t, position_measurement_error):
-    transition_model = np.array([
-        [1.0, 0.0, 0.0, delta_t, 0.0, 0.0]
-        [0.0, 1.0, 0.0, 0.0, delta_t, 0.0]
-        [0.0, 0.0, 1.0, 0.0, 0.0, delta_t]
-        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
-        [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
-        [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]])
-    transition_noise_covariance = np.zeros((6,6))
-    measurement_model = np.array([
-        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        [0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
-        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0]])
-    measurement_noise_covariance = position_measurement_error*np.identity(3)
-    control_model = None
-    return smc_kalman.LinearGaussianModel(
-        transition_model,
-        transition_noise_covariance,
-        measurement_model,
-        measurement_noise_covariance,
-        control_model)
+# Class to implement a motion model for a 3D pose. We assume that each keypoint
+# is described by a separate linear Gaussian sequential Monte Carlo model: a
+# simple constant velocity model in which we observe only position and there is
+# no control model. Internal structure is an smc_kalman.LinearGaussianModel
+# object which describes this keypoint motion model
+class Pose3DMotionModel:
+    def __init__(
+        self,
+        delta_t,
+        position_observation_error,
+        position_transition_error = 0.0,
+        velocity_transition_error = 0.0):
+        keypoint_transition_model = np.concatenate((
+            np.concatenate(
+                (np.identity(3), delta_t*np.identity(3)),
+                axis=1),
+            np.concatenate(
+                (np.zeros((3,3)), np.identity(3)),
+                axis=1)),
+            axis=0)
+        keypoint_transition_noise_covariance = np.diagflat(
+            np.concatenate((
+                np.repeat(position_transition_error**2, 3),
+                np.repeat(velocity_transition_error**2, 3))))
+        keypoint_observation_model = np.concatenate((
+            np.identity(3),
+            np.zeros((3,3))),
+            axis = 1)
+        keypoint_observation_noise_covariance = (position_observation_error**2)*np.identity(3)
+        keypoint_control_model = None
+        self.keypoint_model = smc_kalman.LinearGaussianModel(
+            keypoint_transition_model,
+            keypoint_transition_noise_covariance,
+            keypoint_observation_model,
+            keypoint_observation_noise_covariance,
+            keypoint_control_model)
+
+    # Given the previous 3D pose distribution, apply the motion model to predict
+    # the current 3D pose distribution
+    def predict(
+        self,
+        previous_pose_3d_distribution):
+        previous_keypoint_distributions = previous_pose_3d_distribution.keypoint_distributions
+        previous_tag = previous_pose_3d_distribution.tag
+        current_keypoint_distributions = []
+        for body_part_index in range(num_body_parts):
+            current_keypoint_distribution = self.keypoint_model.predict(
+                previous_keypoint_distributions[body_part_index])
+            current_keypoint_distributions.append(current_keypoint_distribution)
+        current_tag = previous_tag
+        current_pose_3d_distribution = Pose3DDistribution(
+            current_keypoint_distributions,
+            current_tag)
+        return current_pose_3d_distribution
+
+    # Given the prior 3D pose distribution and an observation of the pose
+    # (specified as a Pose3D object), apply the motion model to calculate the
+    # posterior 3D pose distribution which incorporates the information from
+    # this observation. For any keypoints we don't observe, the keypoint
+    # distribution remains unchanged.
+    def incorporate_observation(
+        self,
+        prior_pose_3d_distribution,
+        pose_3d_observation):
+        prior_keypoint_distributions = prior_pose_3d_distribution.keypoint_distributions
+        prior_tag = prior_pose_3d_distribution.tag
+        posterior_keypoint_distributions = []
+        for body_part_index in range(num_body_parts):
+            if pose_3d_observation.valid_keypoints[body_part_index]:
+                posterior_keypoint_distribution = self.keypoint_model.incorporate_observation(
+                    prior_keypoint_distributions[body_part_index],
+                    pose_3d_observation.keypoints[body_part_index])
+            else:
+                posterior_keypoint_distribution = prior_keypoint_distributions[body_part_index]
+            posterior_keypoint_distributions.append(posterior_keypoint_distribution)
+        if prior_tag is None:
+            posterior_tag = pose_3d_observation.tag
+        else:
+            posterior_tag = prior_tag
+        posterior_pose_3d_distribution =  Pose3DDistribution(
+            posterior_keypoint_distributions,
+            posterior_tag)
+        return posterior_pose_3d_distribution
 
 # Calculate the reprojection error between two sets of corresponding 2D points.
 # Used above in evaluating potential 3D poses
