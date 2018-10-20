@@ -754,10 +754,12 @@ class Pose3DDistribution:
     def __init__(
         self,
         keypoint_distributions,
+        timestamp = None,
         tag = None):
         if len(keypoint_distributions) != num_body_parts:
             raise ValueError('List of keypoint distributions is not of length {}'.format(num_body_parts))
         self.keypoint_distributions = keypoint_distributions
+        self.timestamp = timestamp
         self.tag = tag
 
     # Initialize the distributions
@@ -768,6 +770,7 @@ class Pose3DDistribution:
         keypoint_velocity_means,
         keypoint_position_error,
         keypoint_velocity_error,
+        timestamp= None,
         tag = None):
         keypoint_position_means = np.asarray(keypoint_position_means)
         keypoint_velocity_means = np.asarray(keypoint_velocity_means)
@@ -796,7 +799,12 @@ class Pose3DDistribution:
             keypoint_distributions.append(keypoint_distribution)
         return cls(
             keypoint_distributions,
+            timestamp,
             tag)
+
+    # Return timestamp
+    def timestamp():
+        return self.timestamp
 
     # Return keypoint means
     def keypoint_means(self):
@@ -825,6 +833,79 @@ class Pose3DDistribution:
     # Return keypoint position standard deviations
     def keypoint_velocity_std_devs(self):
         return self.keypoint_std_devs()[:, 3:]
+
+    # Return tag
+    def tag():
+        return self.tag
+
+# Class to hold data for a 3D pose track. Internal structure is a list of
+# Pose3DDistribution objects, one for each moment in time
+class Pose3DTrack:
+    def __init__(
+        self,
+        pose_3d_distributions):
+        self.pose_3d_distributions = pose_3d_distributions
+
+    # Initialize the distributions
+    @classmethod
+    def initialize(
+        cls,
+        keypoint_position_means,
+        keypoint_velocity_means,
+        keypoint_position_error,
+        keypoint_velocity_error,
+        timestamp = None,
+        tag = None):
+        pose_3d_distributions = [Pose3DDistribution.initialize(
+            keypoint_position_means,
+            keypoint_velocity_means,
+            keypoint_position_error,
+            keypoint_velocity_error,
+            timestamp,
+            tag)]
+        return cls(pose_3d_distributions)
+
+    # Return timestamps
+    def timestamps(self):
+        return np.asarray([pose_3d_distribution.timestamp for pose_3d_distribution in self.pose_3d_distributions])
+
+    # Return keypoint means
+    def keypoint_means(self):
+        return np.asarray([[keypoint_distribution.mean for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in self.pose_3d_distributions])
+
+    # Return keypoint covariances()
+    def keypoint_covariances(self):
+        return np.asarray([[keypoint_distribution.covariance for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in self.pose_3d_distributions])
+
+    # Return keypoint position means
+    def keypoint_position_means(self):
+        return self.keypoint_means()[:, :, :3]
+
+    # Return keypoint position means
+    def keypoint_velocity_means(self):
+        return self.keypoint_means()[:, :, 3:]
+
+    # Return keypoint standard deviations
+    def keypoint_std_devs(self):
+        return np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance) for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in self.pose_3d_distributions])
+
+    # Return keypoint position standard deviations
+    def keypoint_position_std_devs(self):
+        return self.keypoint_std_devs()[:, :, :3]
+
+    # Return keypoint position standard deviations
+    def keypoint_velocity_std_devs(self):
+        return self.keypoint_std_devs()[:, :, 3:]
+
+    # Return the last 3D pose distribution in the list
+    def last(self):
+        return self.pose_3d_distributions[-1]
+
+    # Append a 3D pose distribution to the track
+    def append(
+        self,
+        pose_3d_distribution):
+        self.pose_3d_distributions.append(pose_3d_distribution)
 
 # Class to implement a motion model for a 3D pose. We assume that each keypoint
 # is described by a separate linear Gaussian sequential Monte Carlo model: a
