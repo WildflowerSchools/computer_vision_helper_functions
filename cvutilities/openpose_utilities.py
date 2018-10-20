@@ -87,6 +87,11 @@ body_part_connectors = [
     [0, 15],
     [15, 17]]
 
+# Define some subsets of indices that we will use when calculating anchor points
+neck_index = 1
+shoulder_indices = [2, 5]
+head_and_torso_indices = [0, 1, 2, 5, 8, 11, 14 , 15, 16, 17]
+
 # Class to hold the data for a single 2D pose
 class Pose2D:
     def __init__(
@@ -463,6 +468,24 @@ class Pose3D:
             common_keypoint_positions_mask,
             projection_error,
             tag)
+
+    # Calculate an anchor point that we can use as the position of the person as
+    # a whole (e.g., for pose tracking). Ideally, this would be a point that
+    # moves only when the whole person moves (e.g., not just when they move
+    # their limbs)
+    def anchor_point(self):
+        if self.valid_keypoints[neck_index]:
+            return self.keypoints[neck_index]
+        if np.all(self.valid_keypoints[shoulder_indices]):
+            return np.mean(self.keypoints[shoulder_indices], axis = 0)
+        if np.any(self.valid_keypoints[head_and_torso_indices]):
+            head_and_torso_keypoints = np.full(18, False)
+            head_and_torso_keypoints[head_and_torso_indices] = True
+            valid_head_and_torso_keypoints = np.logical_and(
+                head_and_torso_keypoints,
+                self.valid_keypoints)
+            return np.mean(self.keypoints[valid_head_and_torso_keypoints], axis = 0)
+        return np.mean(self.keypoints[self.valid_keypoints], axis = 0)
 
     # Given a set of camera calibration parameters, project this 3D pose into
     # the camera coordinate system to produce a 2D pose
