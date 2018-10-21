@@ -92,6 +92,9 @@ neck_index = 1
 shoulder_indices = [2, 5]
 head_and_torso_indices = [0, 1, 2, 5, 8, 11, 14 , 15, 16, 17]
 
+# Specify time unit when unitless time value is needed (e.g., in Kalman filter)
+time_unit = np.timedelta64(1, 's')
+
 # Class to hold the data for a single 2D pose
 class Pose2D:
     def __init__(
@@ -910,11 +913,22 @@ class Pose3DDistribution:
 
     # Given a keypoint motion model and a time interval, apply the motion model
     # to calculate the next 3D pose distribution. Keypoint motion model is an
-    # instance of the KeypointMotionModel class
+    # instance of the KeypointMotionModel class. User can specify time interval
+    # explicitly or method will attempt to infer from ending timestamp. Time
+    # unit is specified above. In the future, we may want to make underlying
+    # functions be able to handle time intervals with units.
     def predict(
         self,
         keypoint_motion_model,
-        delta_t):
+        delta_t = None,
+        ending_timestamp = None):
+        beginning_timestamp = self.timestamp
+        if delta_t is not None and ending_timestamp is not None:
+            raise ValueError('Specify either time interval or ending timestamp but not both')
+        if beginning_timestamp is not None and ending_timestamp is not None:
+            delta_t = (ending_timestamp - beginning_timestamp)/time_unit
+        if delta_t is None:
+            raise ValueError('Time interval not specified and cannot be inferred')
         current_keypoint_distributions = self.keypoint_distributions
         current_tag = self.tag
         keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model(delta_t)
