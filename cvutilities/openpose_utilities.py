@@ -977,9 +977,8 @@ class Pose3DDistribution:
             posterior_timestamp)
         return posterior_pose_3d_distribution
 
-
-
-# Class to hold data for a 3D pose track. Internal structure is a list of
+# Class to hold data for a 3D pose track: a collection of 3D pose distributions
+# describing the path of a person over time. Internal structure is a list of
 # Pose3DDistribution objects, one for each moment in time
 class Pose3DTrack:
     def __init__(
@@ -987,7 +986,7 @@ class Pose3DTrack:
         pose_3d_distributions):
         self.pose_3d_distributions = pose_3d_distributions
 
-    # Initialize the distributions
+    # Initialize the track
     @classmethod
     def initialize(
         cls,
@@ -1082,6 +1081,50 @@ class Pose3DTrack:
             keypoint_motion_model,
             pose_3d_observation)
         self.pose_3d_distributions[-1] = posterior_pose_3d_distribution
+
+# Class to hold data for a collection of 3D pose tracks. We allow this object to
+# contain both active tracks and inactive tracks. The active tracks are assumed
+# to be synchronized in the sense that all of the last distributions in the
+# active tracks are assumed to describe the same moment in time
+class Pose3DTracks:
+    def __init__(
+        self,
+        active_tracks = None,
+        inactive_tracks = None):
+        check_last_timestamps(active_tracks)
+        self.active_tracks = active_tracks
+        self.inactive_tracks = inactive_tracks
+
+    # Initialize the tracks
+    @classmethod
+    def initialize(
+        cls,
+        keypoint_position_means,
+        keypoint_velocity_means,
+        keypoint_position_error,
+        keypoint_velocity_error,
+        tag = None,
+        timestamp = None,
+        num_tracks = 1):
+        pose_3d_distributions = [Pose3DDistribution.initialize(
+            keypoint_position_means,
+            keypoint_velocity_means,
+            keypoint_position_error,
+            keypoint_velocity_error,
+            tag,
+            timestamp)]
+        track = Pose3DTrack(pose_3d_distributions)
+        active_tracks = [track]*num_tracks
+        return cls(
+            active_tracks = active_tracks,
+            inactive_tracks = None)
+
+# Check that all of the last timestamps in a list of 3D pose tracks are not equal
+def check_last_timestamps(pose_3d_tracks):
+    last_timestamps = np.array([pose_3d_track.last().timestamp for pose_3d_track in pose_3d_tracks])
+    if np.any(last_timestamps != None) and np.any(last_timestamps != last_timestamps[0]):
+        raise ValueError('The last timestamps of the specified tracks are not all equal')
+
 
 # Calculate the reprojection error between two sets of corresponding 2D points.
 # Used above in evaluating potential 3D poses
