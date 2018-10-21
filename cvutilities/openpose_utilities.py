@@ -875,10 +875,6 @@ class Pose3DDistribution:
             timestamp,
             tag)
 
-    # Return timestamp
-    def timestamp():
-        return self.timestamp
-
     # Return keypoint means
     def keypoint_means(self):
         return np.asarray([keypoint_distribution.mean for keypoint_distribution in self.keypoint_distributions])
