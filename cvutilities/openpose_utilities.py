@@ -827,13 +827,13 @@ class Pose3DDistribution:
     def __init__(
         self,
         keypoint_distributions,
-        timestamp = None,
-        tag = None):
+        tag = None,
+        timestamp = None):
         if len(keypoint_distributions) != num_body_parts:
             raise ValueError('List of keypoint distributions is not of length {}'.format(num_body_parts))
         self.keypoint_distributions = keypoint_distributions
-        self.timestamp = timestamp
         self.tag = tag
+        self.timestamp = timestamp
 
     # Initialize the distributions
     @classmethod
@@ -843,8 +843,8 @@ class Pose3DDistribution:
         keypoint_velocity_means,
         keypoint_position_error,
         keypoint_velocity_error,
-        timestamp= None,
-        tag = None):
+        tag = None,
+        timestamp = None):
         keypoint_position_means = np.asarray(keypoint_position_means)
         keypoint_velocity_means = np.asarray(keypoint_velocity_means)
         keypoint_position_error = np.asarray(keypoint_position_error)
@@ -872,8 +872,8 @@ class Pose3DDistribution:
             keypoint_distributions.append(keypoint_distribution)
         return cls(
             keypoint_distributions,
-            timestamp,
-            tag)
+            tag,
+            timestamp)
 
     # Return keypoint means
     def keypoint_means(self):
@@ -917,16 +917,19 @@ class Pose3DDistribution:
         self,
         keypoint_motion_model,
         delta_t = None,
-        ending_timestamp = None):
-        beginning_timestamp = self.timestamp
-        if delta_t is not None and ending_timestamp is not None:
-            raise ValueError('Specify either time interval or ending timestamp but not both')
-        if beginning_timestamp is not None and ending_timestamp is not None:
-            delta_t = (ending_timestamp - beginning_timestamp)/time_unit
-        if delta_t is None:
-            raise ValueError('Time interval not specified and cannot be inferred')
+        next_timestamp = None):
         current_keypoint_distributions = self.keypoint_distributions
         current_tag = self.tag
+        current_timestamp = self.timestamp
+        if delta_t is not None and next_timestamp is not None:
+            raise ValueError('Specify either time interval or ending timestamp but not both')
+        if delta_t is None:
+            if current_timestamp is None:
+                raise ValueError('Time interval not specified and cannot be inferred')
+            delta_t = (next_timestamp - current_timestamp)/time_unit
+        else:
+            if current_timestamp is not None:
+                next_timestamp = current_timestamp + delta_t*time_unit
         keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model(delta_t)
         next_keypoint_distributions = []
         for body_part_index in range(num_body_parts):
@@ -936,7 +939,8 @@ class Pose3DDistribution:
         next_tag = current_tag
         next_pose_3d_distribution = Pose3DDistribution(
             next_keypoint_distributions,
-            next_tag)
+            next_tag,
+            next_timestamp)
         return next_pose_3d_distribution
 
     # Given a keypoint motion model and an observation of the 3D pose (specified
@@ -951,6 +955,7 @@ class Pose3DDistribution:
         pose_3d_observation):
         prior_keypoint_distributions = self.keypoint_distributions
         prior_tag = self.tag
+        prior_timestamp = self.timestamp
         keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model()
         posterior_keypoint_distributions = []
         for body_part_index in range(num_body_parts):
@@ -965,9 +970,11 @@ class Pose3DDistribution:
             posterior_tag = pose_3d_observation.tag
         else:
             posterior_tag = prior_tag
+        posterior_timestamp = prior_timestamp
         posterior_pose_3d_distribution =  Pose3DDistribution(
             posterior_keypoint_distributions,
-            posterior_tag)
+            posterior_tag,
+            posterior_timestamp)
         return posterior_pose_3d_distribution
 
 
@@ -988,15 +995,15 @@ class Pose3DTrack:
         keypoint_velocity_means,
         keypoint_position_error,
         keypoint_velocity_error,
-        timestamp = None,
-        tag = None):
+        tag = None,
+        timestamp = None):
         pose_3d_distributions = [Pose3DDistribution.initialize(
             keypoint_position_means,
             keypoint_velocity_means,
             keypoint_position_error,
             keypoint_velocity_error,
-            timestamp,
-            tag)]
+            tag,
+            timestamp)]
         return cls(pose_3d_distributions)
 
     # Return timestamps
@@ -1040,6 +1047,41 @@ class Pose3DTrack:
         self,
         pose_3d_distribution):
         self.pose_3d_distributions.append(pose_3d_distribution)
+
+    # Given a keypoint motion model and a time interval, apply the motion model
+    # to the last pose distribution in the track to calculate the next pose
+    # distribution and add this new pose distribution to the track. Keypoint
+    # motion model is an instance of the KeypointMotionModel class. User can
+    # specify time interval explicitly or method will attempt to infer from
+    # ending timestamp. Time unit is specified above. In the future, we may want
+    # to make underlying functions be able to handle time intervals with units.
+    def predict(
+        self,
+        keypoint_motion_model,
+        delta_t = None,
+        next_timestamp = None):
+        current_pose_3d_distribution = self.last()
+        next_pose_3d_distribution = current_pose_3d_distribution.predict(
+            keypoint_motion_model,
+            delta_t,
+            next_timestamp)
+        self.append(next_pose_3d_distribution)
+
+    # Given a keypoint motion model and an observation of the 3D pose (specified
+    # as a Pose3D object), apply the motion model to the last pose distribution
+    # in the track to calculate the posterior 3D pose distribution which
+    # incorporates the information from this observation. Replace the last pose
+    # distribution in the track with this posterior distribution. Keypoint
+    # motion model is an instance of the KeypointMotionModel class
+    def incorporate_observation(
+        self,
+        keypoint_motion_model,
+        pose_3d_observation):
+        prior_pose_3d_distribution = self.last()
+        posterior_pose_3d_distribution = prior_pose_3d_distribution.incorporate_observation(
+            keypoint_motion_model,
+            pose_3d_observation)
+        self.pose_3d_distributions[-1] = posterior_pose_3d_distribution
 
 # Calculate the reprojection error between two sets of corresponding 2D points.
 # Used above in evaluating potential 3D poses
