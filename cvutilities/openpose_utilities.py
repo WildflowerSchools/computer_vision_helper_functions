@@ -746,6 +746,76 @@ class Poses3D:
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
 
+# Class to define a motion model for each keypoint. We use a simple
+# constant-velocity model in which only position is observed. We specify
+# transition error (drift) for a reference time interval, so we can scale this
+# error for longer and shorter time intervals. If no observation error is
+# specified, the model can only be used for prediction. If no transition error
+# is specified, the model can only be used for observation.
+class KeypointMotionModel:
+    def __init__(
+        self,
+        reference_delta_t = None,
+        reference_position_transition_error = None,
+        reference_velocity_transition_error = None,
+        position_observation_error = None):
+        self.reference_delta_t = reference_delta_t
+        self.reference_position_transition_error = reference_position_transition_error
+        self.reference_velocity_transition_error = reference_velocity_transition_error
+        self.position_observation_error = position_observation_error
+
+    # Based on the keypoint motion model and a specified time interval, generate
+    # a complete linear Gaussian model (in the format expected by the smc_kalman
+    # package). We allow for the possibility that no time interval is specified,
+    # in which case the resulting linear Gaussian model can only be used for
+    # observation. not prediction
+    def keypoint_linear_gaussian_model(
+        self,
+        delta_t = None):
+        if delta_t is not None:
+            if self.reference_delta_t is None:
+                raise ValueError('Transition model not specified.')
+            position_transition_error = self.reference_position_transition_error*np.sqrt(
+                np.divide(
+                    delta_t,
+                    self.reference_delta_t))
+            velocity_transition_error = self.reference_velocity_transition_error*np.sqrt(
+                np.divide(
+                    delta_t,
+                    self.reference_delta_t))
+            keypoint_transition_model = np.concatenate((
+                np.concatenate(
+                    (np.identity(3), delta_t*np.identity(3)),
+                    axis=1),
+                np.concatenate(
+                    (np.zeros((3,3)), np.identity(3)),
+                    axis=1)),
+                axis=0)
+            keypoint_transition_noise_covariance = np.diagflat(
+                np.concatenate((
+                    np.repeat(position_transition_error**2, 3),
+                    np.repeat(velocity_transition_error**2, 3))))
+        else:
+            keypoint_transition_model = None
+            keypoint_transition_noise_covariance = None
+        keypoint_control_model = None
+        if self.position_observation_error is not None:
+            keypoint_observation_model = np.concatenate((
+                np.identity(3),
+                np.zeros((3,3))),
+                axis = 1)
+            keypoint_observation_noise_covariance = (self.position_observation_error**2)*np.identity(3)
+        else:
+            keypoint_observation_model = None
+            keypoint_observation_noise_covariance = None
+        keypoint_linear_gaussian_model = smc_kalman.LinearGaussianModel(
+            keypoint_transition_model,
+            keypoint_transition_noise_covariance,
+            keypoint_observation_model,
+            keypoint_observation_noise_covariance,
+            keypoint_control_model)
+        return keypoint_linear_gaussian_model
+
 # Class to hold the data for a set of Gaussian distributions describing a 3D
 # pose (one three-dimensional Gaussian distribution describing the position and
 # velocity of each body part). Internal structure is a list of
@@ -838,6 +908,60 @@ class Pose3DDistribution:
     def tag():
         return self.tag
 
+    # Given a keypoint motion model and a time interval, apply the motion model
+    # to calculate the next 3D pose distribution. Keypoint motion model is an
+    # instance of the KeypointMotionModel class
+    def predict(
+        self,
+        keypoint_motion_model,
+        delta_t):
+        current_keypoint_distributions = self.keypoint_distributions
+        current_tag = self.tag
+        keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model(delta_t)
+        next_keypoint_distributions = []
+        for body_part_index in range(num_body_parts):
+            next_keypoint_distribution = keypoint_linear_gaussian_model.predict(
+                current_keypoint_distributions[body_part_index])
+            next_keypoint_distributions.append(next_keypoint_distribution)
+        next_tag = current_tag
+        next_pose_3d_distribution = Pose3DDistribution(
+            next_keypoint_distributions,
+            next_tag)
+        return next_pose_3d_distribution
+
+    # Given a keypoint motion model and an observation of the 3D pose (specified
+    # as a Pose3D object), apply the motion model to calculate the posterior 3D
+    # pose distribution which incorporates the information from this
+    # observation. For any keypoints we don't observe, the keypoint distribution
+    # remains unchanged.Keypoint motion model is an instance of the
+    # KeypointMotionModel class
+    def incorporate_observation(
+        self,
+        keypoint_motion_model,
+        pose_3d_observation):
+        prior_keypoint_distributions = self.keypoint_distributions
+        prior_tag = self.tag
+        keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model()
+        posterior_keypoint_distributions = []
+        for body_part_index in range(num_body_parts):
+            if pose_3d_observation.valid_keypoints[body_part_index]:
+                posterior_keypoint_distribution = keypoint_linear_gaussian_model.incorporate_observation(
+                    prior_keypoint_distributions[body_part_index],
+                    pose_3d_observation.keypoints[body_part_index])
+            else:
+                posterior_keypoint_distribution = prior_keypoint_distributions[body_part_index]
+            posterior_keypoint_distributions.append(posterior_keypoint_distribution)
+        if prior_tag is None:
+            posterior_tag = pose_3d_observation.tag
+        else:
+            posterior_tag = prior_tag
+        posterior_pose_3d_distribution =  Pose3DDistribution(
+            posterior_keypoint_distributions,
+            posterior_tag)
+        return posterior_pose_3d_distribution
+
+
+
 # Class to hold data for a 3D pose track. Internal structure is a list of
 # Pose3DDistribution objects, one for each moment in time
 class Pose3DTrack:
@@ -906,90 +1030,6 @@ class Pose3DTrack:
         self,
         pose_3d_distribution):
         self.pose_3d_distributions.append(pose_3d_distribution)
-
-# Class to implement a motion model for a 3D pose. We assume that each keypoint
-# is described by a separate linear Gaussian sequential Monte Carlo model: a
-# simple constant velocity model in which we observe only position and there is
-# no control model. Internal structure is an smc_kalman.LinearGaussianModel
-# object which describes this keypoint motion model
-class Pose3DMotionModel:
-    def __init__(
-        self,
-        delta_t,
-        position_observation_error,
-        position_transition_error = 0.0,
-        velocity_transition_error = 0.0):
-        keypoint_transition_model = np.concatenate((
-            np.concatenate(
-                (np.identity(3), delta_t*np.identity(3)),
-                axis=1),
-            np.concatenate(
-                (np.zeros((3,3)), np.identity(3)),
-                axis=1)),
-            axis=0)
-        keypoint_transition_noise_covariance = np.diagflat(
-            np.concatenate((
-                np.repeat(position_transition_error**2, 3),
-                np.repeat(velocity_transition_error**2, 3))))
-        keypoint_observation_model = np.concatenate((
-            np.identity(3),
-            np.zeros((3,3))),
-            axis = 1)
-        keypoint_observation_noise_covariance = (position_observation_error**2)*np.identity(3)
-        keypoint_control_model = None
-        self.keypoint_model = smc_kalman.LinearGaussianModel(
-            keypoint_transition_model,
-            keypoint_transition_noise_covariance,
-            keypoint_observation_model,
-            keypoint_observation_noise_covariance,
-            keypoint_control_model)
-
-    # Given the previous 3D pose distribution, apply the motion model to predict
-    # the current 3D pose distribution
-    def predict(
-        self,
-        previous_pose_3d_distribution):
-        previous_keypoint_distributions = previous_pose_3d_distribution.keypoint_distributions
-        previous_tag = previous_pose_3d_distribution.tag
-        current_keypoint_distributions = []
-        for body_part_index in range(num_body_parts):
-            current_keypoint_distribution = self.keypoint_model.predict(
-                previous_keypoint_distributions[body_part_index])
-            current_keypoint_distributions.append(current_keypoint_distribution)
-        current_tag = previous_tag
-        current_pose_3d_distribution = Pose3DDistribution(
-            current_keypoint_distributions,
-            current_tag)
-        return current_pose_3d_distribution
-
-    # Given the prior 3D pose distribution and an observation of the pose
-    # (specified as a Pose3D object), apply the motion model to calculate the
-    # posterior 3D pose distribution which incorporates the information from
-    # this observation. For any keypoints we don't observe, the keypoint
-    # distribution remains unchanged.
-    def incorporate_observation(
-        self,
-        prior_pose_3d_distribution,
-        pose_3d_observation):
-        prior_keypoint_distributions = prior_pose_3d_distribution.keypoint_distributions
-        prior_tag = prior_pose_3d_distribution.tag
-        posterior_keypoint_distributions = []
-        for body_part_index in range(num_body_parts):
-            if pose_3d_observation.valid_keypoints[body_part_index]:
-                posterior_keypoint_distribution = self.keypoint_model.incorporate_observation(
-                    prior_keypoint_distributions[body_part_index],
-                    pose_3d_observation.keypoints[body_part_index])
-            else:
-                posterior_keypoint_distribution = prior_keypoint_distributions[body_part_index]
-            posterior_keypoint_distributions.append(posterior_keypoint_distribution)
-        if prior_tag is None:
-            posterior_tag = pose_3d_observation.tag
-        else:
-            posterior_tag = prior_tag
-        posterior_pose_3d_distribution =  Pose3DDistribution(
-            posterior_keypoint_distributions,
-            posterior_tag)
-        return posterior_pose_3d_distribution
 
 # Calculate the reprojection error between two sets of corresponding 2D points.
 # Used above in evaluating potential 3D poses
