@@ -999,6 +999,9 @@ class Pose3DDistribution:
         prior_keypoint_distributions = self.keypoint_distributions
         prior_tag = self.tag
         prior_timestamp = self.timestamp
+        observation_timestamp = pose_3d_observation.timestamp
+        if prior_timestamp is not None and observation_timestamp is not None and prior_timestamp != observation_timestamp:
+            raise ValueError('Timestamp on observation does not match timestamp on observed state')
         keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model()
         posterior_keypoint_distributions = []
         for body_part_index in range(num_body_parts):
@@ -1013,7 +1016,10 @@ class Pose3DDistribution:
             posterior_tag = pose_3d_observation.tag
         else:
             posterior_tag = prior_tag
-        posterior_timestamp = prior_timestamp
+        if observation_timestamp is not None:
+            posterior_timestamp = observation_timestamp
+        else:
+            posterior_timestamp = prior_timestamp
         posterior_pose_3d_distribution =  Pose3DDistribution(
             posterior_keypoint_distributions,
             posterior_tag,
