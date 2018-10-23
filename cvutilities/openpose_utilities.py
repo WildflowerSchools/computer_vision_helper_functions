@@ -964,6 +964,9 @@ class Pose3DDistribution:
         current_keypoint_distributions = self.keypoint_distributions
         current_tag = self.tag
         current_timestamp = self.timestamp
+        print('delta_t: {}'.format(delta_t))
+        print('current_timestamp: {}'.format(current_timestamp))
+        print('next_timestamp: {}'.format(next_timestamp))
         if delta_t is not None and next_timestamp is not None:
             raise ValueError('Specify either time interval or ending timestamp but not both')
         if delta_t is None:
@@ -1155,18 +1158,66 @@ class Pose3DTracks:
         tag = None,
         timestamp = None,
         num_tracks = 1):
-        pose_3d_distributions = [Pose3DDistribution.initialize(
-            keypoint_position_means,
-            keypoint_velocity_means,
-            keypoint_position_error,
-            keypoint_velocity_error,
-            tag,
-            timestamp)]
-        track = Pose3DTrack(pose_3d_distributions)
-        active_tracks = [track]*num_tracks
+        active_tracks=[]
+        for track_index in range(num_tracks):
+            pose_3d_distributions = [Pose3DDistribution.initialize(
+                keypoint_position_means,
+                keypoint_velocity_means,
+                keypoint_position_error,
+                keypoint_velocity_error,
+                tag,
+                timestamp)]
+            track = Pose3DTrack(pose_3d_distributions)
+            active_tracks.append(track)
         return cls(
             active_tracks = active_tracks,
             inactive_tracks = None)
+
+    # Return number of active tracks
+    def num_active_tracks(self):
+        return len(self.active_tracks)
+
+    # Given a keypoint motion model and a time interval, apply the motion model
+    # to all tracks. Keypoint motion model is an instance of the
+    # KeypointMotionModel class. User can specify time interval explicitly or
+    # method will attempt to infer from ending timestamp. Time unit is specified
+    # above. In the future, we may want to make underlying functions be able to
+    # handle time intervals with units.
+    def predict(
+        self,
+        keypoint_motion_model,
+        delta_t = None,
+        next_timestamp = None):
+        for active_track in self.active_tracks:
+            active_track.predict(
+                keypoint_motion_model,
+                delta_t,
+                next_timestamp)
+
+    # Given a keypoint motion model and an observation of the 3D pose (specified
+    # as a Pose3D object), apply the motion model to selected tracks to
+    # calculate the posterior 3D pose distribution for those tracks. Leave other
+    # tracks unchanged. Keypoint motion model is an instance of the
+    # KeypointMotionModel class
+    def incorporate_observation(
+        self,
+        keypoint_motion_model,
+        pose_3d_observations,
+        track_indices = None):
+        # If track indices are not specified, assume we want to observe all
+        # tracks
+        if track_indices is None:
+            track_indices = self.num_active_tracks()
+        num_selected_tracks = len(track_indices)
+        num_observations = len(pose_3d_observations)
+        if num_observations != num_selected_tracks:
+            raise ValueError('Number of supplied observations does not match number of selected tracks')
+        for observation_index in range(num_observations):
+            track_index = track_indices[observation_index]
+            print('Track: {}. Observation: {}'.format(track_index, observation_index))
+            self.active_tracks[track_index].incorporate_observation(
+                keypoint_motion_model,
+                pose_3d_observations[observation_index])
 
 # Check that all of the last timestamps in a list of 3D pose tracks are not equal
 def check_last_timestamps(pose_3d_tracks):
