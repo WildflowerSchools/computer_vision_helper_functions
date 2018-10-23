@@ -102,7 +102,8 @@ class Pose2D:
         keypoints,
         confidence_scores,
         valid_keypoints,
-        tag = None):
+        tag = None,
+        timestamp = None):
         keypoints = np.asarray(keypoints)
         confidence_scores = np.asarray(confidence_scores)
         valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
@@ -119,11 +120,15 @@ class Pose2D:
         self.confidence_scores = confidence_scores
         self.valid_keypoints = valid_keypoints
         self.tag = tag
+        self.timestamp = timestamp
 
     # Pull the pose data from a dictionary with the same structure as the
     # correponding OpenPose output JSON string
     @classmethod
-    def from_openpose_person_json_data(cls, json_data):
+    def from_openpose_person_json_data(
+        cls,
+        json_data,
+        timestamp = None):
         keypoint_vector = np.asarray(json_data[openpose_keypoint_vector_name])
         if keypoint_vector.size != num_body_parts*3:
             raise ValueError('OpenPose keypoint vector does not appear to be of size {}*3'.format(num_body_parts))
@@ -131,13 +136,22 @@ class Pose2D:
         keypoints = keypoint_array[:, :2]
         confidence_scores = keypoint_array[:, 2]
         valid_keypoints = np.not_equal(confidence_scores, 0.0)
-        return cls(keypoints, confidence_scores, valid_keypoints)
+        return cls(
+            keypoints,
+            confidence_scores,
+            valid_keypoints,
+            timestamp = timestamp)
 
     # Pull the pose data from an OpenPose output JSON string
     @classmethod
-    def from_openpose_person_json_string(cls, json_string):
+    def from_openpose_person_json_string(
+        cls,
+        json_string,
+        timestamp = None):
         json_data = json.loads(json_string)
-        return cls.from_openpose_person_json_data(json_data)
+        return cls.from_openpose_person_json_data(
+            json_data,
+            timestamp)
 
     # Set tag (we provide a function for this to stay consistent with the other
     # classes and with the princple that users of these classes should never
@@ -193,9 +207,10 @@ class Poses2D:
     def from_openpose_output_json_data(
         cls,
         json_data,
-        source_images = None):
+        source_images = None,
+        timestamp=None):
         people_json_data = json_data[openpose_people_list_name]
-        poses = [[Pose2D.from_openpose_person_json_data(person_json_data) for person_json_data in people_json_data]]
+        poses = [[Pose2D.from_openpose_person_json_data(person_json_data, timestamp) for person_json_data in people_json_data]]
         return cls(
             poses,
             source_images)
@@ -206,11 +221,13 @@ class Poses2D:
     def from_openpose_output_json_string(
         cls,
         json_string,
-        source_images = None):
+        source_images = None,
+        timestamp = None):
         json_data = json.loads(json_string)
         return cls.from_openpose_output_json_data(
             json_data,
-            source_images)
+            source_images,
+            timestamp)
 
     # Pull the pose data for a single camera from a local OpenPose output JSON
     # file
@@ -218,12 +235,14 @@ class Poses2D:
     def from_openpose_output_json_file(
         cls,
         json_file_path,
-        source_images = None):
+        source_images = None,
+        timestamp = None):
         with open(json_file_path) as json_file:
             json_data = json.load(json_file)
         return cls.from_openpose_output_json_data(
             json_data,
-            source_images)
+            source_images,
+            timestamp)
 
     # Pull the pose data for a single camera from an OpenPose output JSON file
     # stored on S3 and specified by S3 bucket and object names
@@ -232,13 +251,15 @@ class Poses2D:
         cls,
         s3_bucket_name,
         s3_object_name,
-        source_images = None):
+        source_images = None,
+        timestamp = None):
         s3_object = boto3.resource('s3').Object(s3_bucket_name, s3_object_name)
         s3_object_content = s3_object.get()['Body'].read().decode('utf-8')
         json_data = json.loads(s3_object_content)
         return cls.from_openpose_output_json_data(
             json_data,
-            source_images)
+            source_images,
+            timestamp)
 
     # Pull the pose data for a single camera from an OpenPose output JSON file
     # stored on S3 and specified by classroom name, camera name, and a Python
@@ -265,7 +286,8 @@ class Poses2D:
         return cls.from_openpose_output_s3_object(
             s3_bucket_name,
             s3_object_name,
-            source_images)
+            source_images,
+            timestamp = datetime)
 
     # Pull the pose data for multiple cameras at a single moment in time from a
     # set of OpenPose output JSON files stored on S3 and specified by classroom
@@ -284,7 +306,10 @@ class Poses2D:
                 classroom_name,
                 camera_name,
                 datetime)
-            camera = Poses2D.from_openpose_output_s3_object(s3_bucket_name, s3_object_name)
+            camera = Poses2D.from_openpose_output_s3_object(
+                s3_bucket_name,
+                s3_object_name,
+                timestamp = datetime)
             poses.append(camera.poses[0])
         if fetch_source_images:
             source_images = []
@@ -338,6 +363,10 @@ class Poses2D:
     def tags(self):
         return [[pose.tag for pose in camera] for camera in self.poses]
 
+    # Return pose timestamps
+    def timestamps(self):
+        return [[pose.timestamp for pose in camera] for camera in self.poses]
+
     # Plot the poses onto a set of charts, one for each source camera view.
     def plot(
         self,
@@ -376,7 +405,8 @@ class Pose3D:
         keypoints,
         valid_keypoints,
         projection_error = None,
-        tag = None):
+        tag = None,
+        timestamp = None):
         keypoints = np.asarray(keypoints)
         valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
         projection_error = np.asarray(projection_error)
@@ -393,6 +423,7 @@ class Pose3D:
         self.valid_keypoints = valid_keypoints
         self.projection_error = projection_error
         self.tag = tag
+        self.timestamp = timestamp
 
     # Calculate a 3D pose by triangulating between two 2D poses from two
     # different cameras
@@ -466,11 +497,17 @@ class Pose3D:
             tag = pose_2d_a.tag
         else:
             tag = '{}/{}'.format(pose_2d_a.tag, pose_2d_b.tag)
+        timestamp = None
+        if pose_2d_a.timestamp is not None and pose_2d_b.timestamp is not None:
+            if pose_2d_a.timestamp != pose_2d_b.timestamp:
+                raise ValueError('2D poses have different timstamps')
+            timestamp = pose_2d_a.timestamp
         return cls(
             keypoints,
             common_keypoint_positions_mask,
             projection_error,
-            tag)
+            tag,
+            timestamp)
 
     # Calculate an anchor point that we can use as the position of the person as
     # a whole (e.g., for pose tracking). Ideally, this would be a point that
@@ -504,11 +541,13 @@ class Pose3D:
         valid_keypoints_2d =  self.valid_keypoints
         confidence_scores_2d = np.repeat(np.nan, num_body_parts)
         tag_2d = self.tag
+        timestamp_2d = self.timestamp
         pose_2d = Pose2D(
             keypoints_2d,
             confidence_scores_2d,
             valid_keypoints_2d,
-            tag_2d)
+            tag_2d,
+            timestamp_2d)
         return pose_2d
 
     # Draw the 3D pose onto a chart representing a top-down view of the room. We
@@ -615,6 +654,10 @@ class Poses3D:
     # Return the tags for all of the 3D poses in the collection.
     def tags(self):
         return [edge[2]['pose'].tag for edge in list(self.pose_graph.edges.data())]
+
+    # Return the tags for all of the 3D poses in the collection.
+    def timestamps(self):
+        return np.array([edge[2]['pose'].timestamp for edge in list(self.pose_graph.edges.data())])
 
     # Using the camera calibration parameters from the original source images,
     # project this collection of 3D poses back into the coordinate system for
