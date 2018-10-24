@@ -964,9 +964,6 @@ class Pose3DDistribution:
         current_keypoint_distributions = self.keypoint_distributions
         current_tag = self.tag
         current_timestamp = self.timestamp
-        print('delta_t: {}'.format(delta_t))
-        print('current_timestamp: {}'.format(current_timestamp))
-        print('next_timestamp: {}'.format(next_timestamp))
         if delta_t is not None and next_timestamp is not None:
             raise ValueError('Specify either time interval or ending timestamp but not both')
         if delta_t is None:
@@ -1336,7 +1333,6 @@ class Pose3DTracks:
             raise ValueError('Number of supplied observations does not match number of selected tracks')
         for observation_index in range(num_observations):
             track_index = track_indices[observation_index]
-            print('Track: {}. Observation: {}'.format(track_index, observation_index))
             self.active_tracks[track_index].incorporate_observation(
                 keypoint_motion_model,
                 pose_3d_observations[observation_index])
