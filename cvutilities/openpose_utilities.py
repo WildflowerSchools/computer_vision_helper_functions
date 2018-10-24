@@ -1142,7 +1142,11 @@ class Pose3DTracks:
     def __init__(
         self,
         active_tracks = None,
-        inactive_tracks = None):
+        inactive_tracks = None,
+        initial_keypoint_position_means = None,
+        initial_keypoint_velocity_means = None,
+        initial_keypoint_position_error = None,
+        initial_keypoint_velocity_error = None):
         if active_tracks is not None:
             check_last_timestamps(active_tracks)
         if active_tracks is None:
@@ -1151,32 +1155,39 @@ class Pose3DTracks:
             inactive_tracks = []
         self.active_tracks = active_tracks
         self.inactive_tracks = inactive_tracks
+        self.initial_keypoint_position_means = initial_keypoint_position_means
+        self.initial_keypoint_velocity_means = initial_keypoint_velocity_means
+        self.initial_keypoint_position_error = initial_keypoint_position_error
+        self.initial_keypoint_velocity_error = initial_keypoint_velocity_error
 
     # Initialize the tracks
     @classmethod
     def initialize(
         cls,
-        keypoint_position_means,
-        keypoint_velocity_means,
-        keypoint_position_error,
-        keypoint_velocity_error,
+        initial_keypoint_position_means,
+        initial_keypoint_velocity_means,
+        initial_keypoint_position_error,
+        initial_keypoint_velocity_error,
         tag = None,
         timestamp = None,
         num_tracks = 1):
         active_tracks=[]
         for track_index in range(num_tracks):
-            pose_3d_distributions = [Pose3DDistribution.initialize(
-                keypoint_position_means,
-                keypoint_velocity_means,
-                keypoint_position_error,
-                keypoint_velocity_error,
-                tag,
-                timestamp)]
-            track = Pose3DTrack(pose_3d_distributions)
+            track = Pose3DTrack.initialize(
+                initial_keypoint_position_means,
+                initial_keypoint_velocity_means,
+                initial_keypoint_position_error,
+                initial_keypoint_velocity_error,
+                tag = None,
+                timestamp = None)
             active_tracks.append(track)
         return cls(
             active_tracks = active_tracks,
-            inactive_tracks = None)
+            inactive_tracks = None,
+            initial_keypoint_position_means = initial_keypoint_position_means,
+            initial_keypoint_velocity_means = initial_keypoint_velocity_means,
+            initial_keypoint_position_error = initial_keypoint_position_error,
+            initial_keypoint_velocity_error = initial_keypoint_velocity_error)
 
     # Return number of active tracks
     def num_active_tracks(self):
@@ -1266,6 +1277,27 @@ class Pose3DTracks:
         reverse_sorted_track_indices = sorted(track_indices, reverse = True)
         for track_index in reverse_sorted_track_indices:
             self.deactivate_track(track_index)
+
+    # Add new tracks, using the initialization parameters stored in the class
+    def add_new_tracks(
+        self,
+        num_new_tracks = 1):
+        last_timestamps = self.last_timestamps()
+        if last_timestamps.size > 0:
+            if np.any(last_timestamps != None) and np.any(last_timestamps != last_timestamps[0]):
+                raise ValueError('The last timestamps of the specified tracks are not all equal')
+            timestamp = last_timestamps[0]
+        else:
+            timestamp = None
+        for new_track_index in range(num_new_tracks):
+            new_track = Pose3DTrack.initialize(
+                self.initial_keypoint_position_means,
+                self.initial_keypoint_velocity_means,
+                self.initial_keypoint_position_error,
+                self.initial_keypoint_velocity_error,
+                timestamp = timestamp)
+            self.active_tracks.append(new_track)
+
 
     # Given a keypoint motion model and a time interval, apply the motion model
     # to all tracks. Keypoint motion model is an instance of the
