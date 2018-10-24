@@ -1143,7 +1143,12 @@ class Pose3DTracks:
         self,
         active_tracks = None,
         inactive_tracks = None):
-        check_last_timestamps(active_tracks)
+        if active_tracks is not None:
+            check_last_timestamps(active_tracks)
+        if active_tracks is None:
+            active_tracks = []
+        if inactive_tracks is None:
+            inactive_tracks = []
         self.active_tracks = active_tracks
         self.inactive_tracks = inactive_tracks
 
@@ -1176,6 +1181,10 @@ class Pose3DTracks:
     # Return number of active tracks
     def num_active_tracks(self):
         return len(self.active_tracks)
+
+    # Return number of inactive tracks
+    def num_inactive_tracks(self):
+        return len(self.inactive_tracks)
 
     # Return timestamps
     def active_timestamps(self):
@@ -1240,6 +1249,23 @@ class Pose3DTracks:
     # Return keypoint position standard deviations
     def last_keypoint_velocity_std_devs(self):
         return np.sqrt(np.asarray([[np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
+
+    # Move a track to inactive
+    def deactivate_track(
+        self,
+        track_index):
+        self.inactive_tracks.append(self.active_tracks.pop(track_index))
+
+    # Move one or more tracks to inactive
+    def deactivate_tracks(
+        self,
+        track_indices):
+        # We need to reverse-sort the track indices first so the first pop()
+        # operations don't throw off the indices for the subsequent pop()
+        # operations
+        reverse_sorted_track_indices = sorted(track_indices, reverse = True)
+        for track_index in reverse_sorted_track_indices:
+            self.deactivate_track(track_index)
 
     # Given a keypoint motion model and a time interval, apply the motion model
     # to all tracks. Keypoint motion model is an instance of the
