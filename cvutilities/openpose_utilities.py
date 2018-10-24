@@ -1026,6 +1026,23 @@ class Pose3DDistribution:
             posterior_timestamp)
         return posterior_pose_3d_distribution
 
+    # Given a keypoint motion model and an observation of the 3D pose (specified
+    # as a Pose3D object), calculate the Mahalanobis distance between the anchor
+    # point of the pose and the anchor point of the observation.Keypoint motion
+    # model is an instance of the KeypointMotionModel class
+    def observation_mahalanobis_distance(
+        self,
+        keypoint_motion_model,
+        pose_3d_observation):
+        anchor_point_state_distribution = self.keypoint_distributions[neck_index]
+        anchor_point_observation = pose_3d_observation.anchor_point()
+        keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model()
+        observation_mahalanobis_distance = keypoint_linear_gaussian_model.observation_mahalanobis_distance(
+            anchor_point_state_distribution,
+            anchor_point_observation)
+        observation_mahalanobis_distance = np.asscalar(observation_mahalanobis_distance)
+        return observation_mahalanobis_distance
+
 # Class to hold data for a 3D pose track: a collection of 3D pose distributions
 # describing the path of a person over time. Internal structure is a list of
 # Pose3DDistribution objects, one for each moment in time
@@ -1130,6 +1147,20 @@ class Pose3DTrack:
             keypoint_motion_model,
             pose_3d_observation)
         self.pose_3d_distributions[-1] = posterior_pose_3d_distribution
+
+    # Given a keypoint motion model and an observation of a 3D pose (specified
+    # as a Pose3D object), calculate the Mahalanobis distance between the anchor
+    # point of the last pose distribution in the track and the anchor point of
+    # the observation. Keypoint motion model is an instance of the
+    # KeypointMotionModel class
+    def observation_mahalanobis_distance(
+        self,
+        keypoint_motion_model,
+        pose_3d_observation):
+        observation_mahalanobis_distance = self.last().observation_mahalanobis_distance(
+            keypoint_motion_model,
+            pose_3d_observation)
+        return observation_mahalanobis_distance
 
 # Class to hold data for a collection of 3D pose tracks. We allow this object to
 # contain both active tracks and inactive tracks. The active tracks are assumed
@@ -1336,6 +1367,25 @@ class Pose3DTracks:
             self.active_tracks[track_index].incorporate_observation(
                 keypoint_motion_model,
                 pose_3d_observations[observation_index])
+
+    # Given a keypoint motion model and a set of 3D pose observations (specified
+    # as a list of Pose3D objects), calculate the cost matrix between the last
+    # 3D pose distributions in the active tracks and the observations
+    def cost_matrix(
+        self,
+        keypoint_motion_model,
+        pose_3d_observations):
+        num_active_tracks = self.num_active_tracks()
+        num_observations = len(pose_3d_observations)
+        cost_matrix = np.zeros((num_active_tracks, num_observations))
+        for active_track_index in range(num_active_tracks):
+            active_track = self.active_tracks[active_track_index]
+            for observation_index in range(num_observations):
+                observation = pose_3d_observations[observation_index]
+                cost_matrix[active_track_index, observation_index] = active_track.observation_mahalanobis_distance(
+                    keypoint_motion_model,
+                    observation)
+        return cost_matrix
 
 # Check that all of the last timestamps in a list of 3D pose tracks are not equal
 def check_last_timestamps(pose_3d_tracks):
