@@ -1384,7 +1384,7 @@ class Pose3DTracks:
         keypoint_motion_model,
         pose_3d_observations,
         cost_threshold = 1.0,
-        num_missed_observations_threshold = 10):
+        num_missed_observations_threshold = 3):
         timestamps = np.array([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations])
         if np.any(timestamps != timestamps[0]):
             raise ValueError('Timestamps on observations are missing or not equal to each other')
@@ -1395,23 +1395,30 @@ class Pose3DTracks:
         cost_matrix = self.cost_matrix(
             keypoint_motion_model,
             pose_3d_observations)
-        selected_track_indices, selected_observation_indices = scipy.optimize.linear_sum_assignment(cost_matrix)
-        unselected_track_indices = np.setdiff1d(np.arange(self.num_active_tracks()), selected_track_indices)
-        unselected_observation_indices = np.setdiff1d(np.arange(len(pose_3d_observations)), selected_observation_indices)
+        matched_track_indices, matched_observation_indices = scipy.optimize.linear_sum_assignment(cost_matrix)
+        matched_track_indices = matched_track_indices.tolist()
+        matched_observation_indices = matched_observation_indices.tolist()
+        num_matched_indices = len(matched_track_indices)
+        for index in sorted(range(num_matched_indices), reverse = True):
+            if cost_matrix[matched_track_indices[index], matched_observation_indices[index]] > cost_threshold:
+                del matched_track_indices[index]
+                del matched_observation_indices[index]
+        unmatched_track_indices = list(set(range(self.num_active_tracks())) - set(matched_track_indices))
+        unmatched_observation_indices = list(set(range(len(pose_3d_observations))) - set(matched_observation_indices))
         self.incorporate_observations(
             keypoint_motion_model,
             pose_3d_observations,
-            selected_track_indices,
-            selected_observation_indices)
-        for unselected_track_index in unselected_track_indices:
-            self.active_tracks[unselected_track_index].num_missed_observations += 1
-            if self.active_tracks[unselected_track_index].num_missed_observations >= num_missed_observations_threshold:
-                deactivate_track(unselected_track_index)
-        for unselected_observation_index in unselected_observation_indices:
+            matched_track_indices,
+            matched_observation_indices)
+        for unmatched_track_index in unmatched_track_indices:
+            self.active_tracks[unmatched_track_index].num_missed_observations += 1
+            if self.active_tracks[unmatched_track_index].num_missed_observations >= num_missed_observations_threshold:
+                self.deactivate_track(unmatched_track_index)
+        for unmatched_observation_index in unmatched_observation_indices:
             self.add_new_tracks(num_new_tracks = 1)
             self.active_tracks[-1].incorporate_observation(
                 keypoint_motion_model,
-                pose_3d_observations[unselected_observation_index])
+                pose_3d_observations[unmatched_observation_index])
 
     # Given a keypoint motion model and a set of 3D pose observations (specified
     # as a list of Pose3D objects), calculate the cost matrix between the last
