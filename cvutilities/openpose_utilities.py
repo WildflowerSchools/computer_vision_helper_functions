@@ -4,6 +4,7 @@ import smc_kalman
 import boto3
 import networkx as nx # We use NetworkX graph structures to hold the 3D pose data
 import numpy as np
+import scipy.optimize
 import matplotlib.pyplot as plt
 import json
 
@@ -1049,8 +1050,10 @@ class Pose3DDistribution:
 class Pose3DTrack:
     def __init__(
         self,
-        pose_3d_distributions):
+        pose_3d_distributions,
+        num_missed_observations = 0):
         self.pose_3d_distributions = pose_3d_distributions
+        self.num_missed_observations = num_missed_observations
 
     # Initialize the track
     @classmethod
@@ -1349,24 +1352,66 @@ class Pose3DTracks:
     # calculate the posterior 3D pose distribution for those tracks. Leave other
     # tracks unchanged. Keypoint motion model is an instance of the
     # KeypointMotionModel class
-    def incorporate_observation(
+    def incorporate_observations(
         self,
         keypoint_motion_model,
         pose_3d_observations,
-        track_indices = None):
-        # If track indices are not specified, assume we want to observe all
-        # tracks
-        if track_indices is None:
-            track_indices = self.num_active_tracks()
-        num_selected_tracks = len(track_indices)
-        num_observations = len(pose_3d_observations)
-        if num_observations != num_selected_tracks:
-            raise ValueError('Number of supplied observations does not match number of selected tracks')
-        for observation_index in range(num_observations):
-            track_index = track_indices[observation_index]
+        selected_track_indices,
+        selected_observation_indices):
+        selected_track_indices = np.array(selected_track_indices)
+        selected_observation_indices = np.array(selected_observation_indices)
+        if selected_track_indices.ndim != 1:
+            raise ValueError('Track indices must be a one-dimensional array-like object')
+        if selected_observation_indices.ndim != 1:
+            raise ValueError('Observation indices must be a one-dimensional array-like object')
+        num_selected_tracks = selected_track_indices.shape[0]
+        num_selected_observations = selected_observation_indices.shape[0]
+        if num_selected_tracks != num_selected_observations:
+            raise ValueError('Number of selected observations does not match number of selected tracks')
+        for index in range(num_selected_tracks):
+            track_index = selected_track_indices[index]
+            observation_index = selected_observation_indices[index]
             self.active_tracks[track_index].incorporate_observation(
                 keypoint_motion_model,
                 pose_3d_observations[observation_index])
+
+    # Given a set of observations, predict the 3D pose distributions of the
+    # active tracks at the time of the observations, compare the observations to
+    # these predictions to calculate a best-guess association between
+    # observations and tracks, and update the tracks accordingly
+    def update(
+        self,
+        keypoint_motion_model,
+        pose_3d_observations,
+        cost_threshold = 1.0,
+        num_missed_observations_threshold = 10):
+        timestamps = np.array([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations])
+        if np.any(timestamps != timestamps[0]):
+            raise ValueError('Timestamps on observations are missing or not equal to each other')
+        timestamp = timestamps[0]
+        self.predict(
+            keypoint_motion_model,
+            next_timestamp = timestamp)
+        cost_matrix = self.cost_matrix(
+            keypoint_motion_model,
+            pose_3d_observations)
+        selected_track_indices, selected_observation_indices = scipy.optimize.linear_sum_assignment(cost_matrix)
+        unselected_track_indices = np.setdiff1d(np.arange(self.num_active_tracks()), selected_track_indices)
+        unselected_observation_indices = np.setdiff1d(np.arange(len(pose_3d_observations)), selected_observation_indices)
+        self.incorporate_observations(
+            keypoint_motion_model,
+            pose_3d_observations,
+            selected_track_indices,
+            selected_observation_indices)
+        for unselected_track_index in unselected_track_indices:
+            self.active_tracks[unselected_track_index].num_missed_observations += 1
+            if self.active_tracks[unselected_track_index].num_missed_observations >= num_missed_observations_threshold:
+                deactivate_track(unselected_track_index)
+        for unselected_observation_index in unselected_observation_indices:
+            self.add_new_tracks(num_new_tracks = 1)
+            self.active_tracks[-1].incorporate_observation(
+                keypoint_motion_model,
+                pose_3d_observations[unselected_observation_index])
 
     # Given a keypoint motion model and a set of 3D pose observations (specified
     # as a list of Pose3D objects), calculate the cost matrix between the last
