@@ -1232,6 +1232,10 @@ class Pose3DTracks:
     def active_timestamps(self):
         return [np.asarray([pose_3d_distribution.timestamp for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
+    # Return timestamps
+    def active_num_missed_observations(self):
+        return np.array([active_track.num_missed_observations for active_track in self.active_tracks])
+
     # Return keypoint means
     def active_keypoint_means(self):
         return [np.asarray([[keypoint_distribution.mean for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
