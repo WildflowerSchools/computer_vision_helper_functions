@@ -407,24 +407,36 @@ class Pose3D:
         valid_keypoints,
         projection_error = None,
         tag = None,
-        timestamp = None):
+        timestamp = None,
+        keypoint_std_devs = None):
         keypoints = np.asarray(keypoints)
-        valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
-        projection_error = np.asarray(projection_error)
         if keypoints.size != num_body_parts*3:
             raise ValueError('Keypoints array does not appear to be of size {}*3'.format(num_body_parts))
+        keypoints = keypoints.reshape((num_body_parts, 3))
+        valid_keypoints = np.asarray(valid_keypoints, dtype = np.bool_)
         if valid_keypoints.size != num_body_parts:
             raise ValueError('Valid keypoints vector does not appear to be of size {}'.format(num_body_parts))
-        if projection_error.size != 1:
-            raise ValueError('Projection error does not appear to be a scalar'.format(num_body_parts))
-        keypoints = keypoints.reshape((num_body_parts, 3))
         valid_keypoints = valid_keypoints.reshape(num_body_parts)
-        projection_error = np.asscalar(projection_error)
+        if projection_error is not None:
+            projection_error = np.asarray(projection_error)
+            if projection_error.size != 1:
+                raise ValueError('Projection error does not appear to be a scalar')
+            projection_error = np.asscalar(projection_error)
+        if timestamp is not None:
+            timestamp = np.asarray(timestamp)
+            if timestamp.size != 1:
+                raise ValueError('Timestamp does not appear to be a scalar')
+        if keypoint_std_devs is not None:
+            keypoint_std_devs = np.array(keypoint_std_devs)
+            if keypoint_std_devs.size != num_body_parts*3:
+                raise ValueError('Keypoint standard deviations array does not appear to be of size {}*3'.format(num_body_parts))
+            keypoint_std_devs = keypoint_std_devs.reshape((num_body_parts, 3))
         self.keypoints = keypoints
         self.valid_keypoints = valid_keypoints
         self.projection_error = projection_error
         self.tag = tag
         self.timestamp = timestamp
+        self.keypoint_std_devs = keypoint_std_devs
 
     # Calculate a 3D pose by triangulating between two 2D poses from two
     # different cameras
@@ -567,6 +579,91 @@ class Pose3D:
         self.draw_topdown()
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
+
+# Class to hold the data for a generic collection of 3D poses, either a set of
+# poses over time (as from a pose track) or a set of poses at a single point in
+# time (as from the last poses in a set of pose tracks) or set of sets of poses
+# over time (as from a collection of pose tracks). Internal structure is a list
+# of lists of Pose3D objects. Output functions attempt to strip off the outer
+# list when appropriate
+class Pose3DListList:
+    def __init__(
+        self,
+        pose_3d_list_list):
+        self.pose_3d_list_list = pose_3d_list_list
+
+    # Return the number of 3D poses in the lists
+    def num_3d_poses(self):
+        num_3d_poses_list = [len(pose_3d_list) for pose_3d_list in self.pose_3d_list_list]
+        if len(num_3d_poses_list) == 1:
+            return num_3d_poses_list[0]
+        else:
+            return num_3d_poses_list
+
+    # Return the keypoints for all of the 3D poses in the lists
+    def keypoints(self):
+        keypoints_list = [np.array([pose_3d.keypoints for pose_3d in pose_3d_list]) for pose_3d_list in self.pose_3d_list_list]
+        if len(keypoints_list) == 1:
+            return keypoints_list[0]
+        else:
+            return keypoints_list
+
+    # Return the keypoint standard deviations for all of the 3D poses in the
+    # lists
+    def keypoint_std_devs(self):
+        keypoint_std_devs_list = [np.array([pose_3d.keypoint_std_devs for pose_3d in pose_3d_list]) for pose_3d_list in self.pose_3d_list_list]
+        if len(keypoint_std_devs_list) == 1:
+            return keypoint_std_devs_list[0]
+        else:
+            return keypoint_std_devs_list
+
+    # Return the valid keypoints Boolean vector for all of the 3D poses in the
+    # lists
+    def valid_keypoints(self):
+        valid_keypoints_list = [np.array([pose_3d.valid_keypoints for pose_3d in pose_3d_list]) for pose_3d_list in self.pose_3d_list_list]
+        if len(valid_keypoints_list) == 1:
+            return valid_keypoints_list[0]
+        else:
+            return valid_keypoints_list
+
+    # Return the projection errors for all of the 3D poses in the lists
+    def projection_errors(self):
+        projection_errors_list = [np.array([pose_3d.projection_error for pose_3d in pose_3d_list]) for pose_3d_list in self.pose_3d_list_list]
+        if len(projection_errors_list) == 1:
+            return projection_errors_list[0]
+        else:
+            return projection_errors_list
+
+    # Return the tags for all of the 3D poses in the lists
+    def tags(self):
+        tags_list = [[pose_3d.tag for pose_3d in pose_3d_list] for pose_3d_list in self.pose_3d_list_list]
+        if len(tags_list) == 1:
+            return tags_list[0]
+        else:
+            return tags_list
+
+    # Return the timestamps for all of the 3D poses in the lists
+    def timestamps(self):
+        timestamps_list = [np.array([pose_3d.timestamp for pose_3d in pose_3d_list]) for pose_3d_list in self.pose_3d_list_list]
+        if len(timestamps_list) == 1:
+            return timestamps_list[0]
+        else:
+            return timestamps_list
+
+    # Plot the lists of poses onto charts representing a top-down view of the
+    # room, one chart per list
+    def plot_topdown(
+        self,
+        room_corners = None):
+        for pose_3d_list in self.pose_3d_list_list:
+            for pose_3d in pose_3d_list:
+                pose_3d.draw_topdown()
+                if pose_3d.tag is not None:
+                    plottable_points = pose_3d.keypoints[pose_3d.valid_keypoints]
+                    centroid = np.mean(plottable_points[:, :2], 0)
+                    plt.text(centroid[0], centroid[1], pose_3d.tag)
+            cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
+            plt.show()
 
 # Class to hold the data for a collection of 3D poses reconstructed from 2D
 # poses across multiple cameras at a single moment in time
@@ -951,6 +1048,18 @@ class Pose3DDistribution:
     def tag():
         return self.tag
 
+    # Construct and return a 3D pose with the mean position keypoints and
+    # position standard deviations of the distribution
+    def to_pose_3d(self):
+        pose_3d = Pose3D(
+            keypoints = self.keypoint_position_means(),
+            valid_keypoints = np.full(18, True),
+            projection_error = None,
+            tag = self.tag,
+            timestamp = self.timestamp,
+            keypoint_std_devs = self.keypoint_position_std_devs())
+        return pose_3d
+
     # Given a keypoint motion model and a time interval, apply the motion model
     # to calculate the next 3D pose distribution. Keypoint motion model is an
     # instance of the KeypointMotionModel class. User can specify time interval
@@ -1110,6 +1219,18 @@ class Pose3DTrack:
     def last(self):
         return self.pose_3d_distributions[-1]
 
+    # Construct and return a list of 3D poses with the mean position keypoints
+    # of the distributions in the track
+    def to_poses_3d(self):
+        poses_3d = Pose3DListList([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in self.pose_3d_distributions]])
+        return poses_3d
+
+    # Construct and return the 3D pose with the mean position keypoints
+    # of the last distribution in the track
+    def last_to_pose_3d(self):
+        pose_3d = self.last().to_pose_3d()
+        return pose_3d
+
     # Append a 3D pose distribution to the track
     def append(
         self,
@@ -1264,6 +1385,12 @@ class Pose3DTracks:
     def active_keypoint_velocity_std_devs(self):
         return [np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
+    # Construct and return a list of lists of 3D poses with the mean position
+    # keypoints of the distributions in the active tracks
+    def active_to_poses_3d(self):
+        poses_3d = Pose3DListList([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in active_track.pose_3d_distributions] for active_track in self.active_tracks])
+        return poses_3d
+
     # Return timestamps for inactive tracks
     def inactive_timestamps(self):
         return [np.asarray([pose_3d_distribution.timestamp for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
@@ -1300,6 +1427,12 @@ class Pose3DTracks:
     def inactive_keypoint_velocity_std_devs(self):
         return [np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
 
+    # Construct and return a list of lists of 3D poses with the mean position
+    # keypoints of the distributions in the inactive tracks
+    def inactive_to_poses_3d(self):
+        poses_3d = Pose3DListList([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in inactive_track.pose_3d_distributions] for inactive_track in self.inactive_tracks])
+        return poses_3d
+
     # Return timestamps for last distributions in each active track
     def last_timestamps(self):
         return np.asarray([active_track.last().timestamp for active_track in self.active_tracks])
@@ -1320,17 +1453,26 @@ class Pose3DTracks:
     def last_keypoint_velocity_means(self):
         return np.asarray([[keypoint_distribution.mean[3:] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks])
 
-    # Return keypoint standard deviations for last distributions in each active track
+    # Return keypoint standard deviations for last distributions in each active
+    # track
     def last_keypoint_std_devs(self):
         return np.sqrt(np.asarray([[np.diag(keypoint_distribution.covariance) for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
 
-    # Return keypoint position standard deviations for last distributions in each active track
+    # Return keypoint position standard deviations for last distributions in
+    # each active track
     def last_keypoint_position_std_devs(self):
         return np.sqrt(np.asarray([[np.diag(keypoint_distribution.covariance)[:3] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
 
-    # Return keypoint velocity standard deviations for last distributions in each active track
+    # Return keypoint velocity standard deviations for last distributions in
+    # each active track
     def last_keypoint_velocity_std_devs(self):
         return np.sqrt(np.asarray([[np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
+
+    # Construct and return a list of 3D poses with the mean position keypoints
+    # of the last distributions in the active tracks
+    def last_to_poses_3d(self):
+        poses_3d = [[active_track.last().to_pose_3d() for active_track in self.active_tracks]]
+        return Pose3DListList(poses_3d)
 
     # Move a track from active to inactive
     def deactivate_track(
