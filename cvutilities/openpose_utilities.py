@@ -702,7 +702,7 @@ class Pose3DListList:
 
 # Class to hold the data for a collection of 3D poses reconstructed from 2D
 # poses across multiple cameras at a single moment in time
-class Poses3D:
+class Pose3DGraph:
     def __init__(
         self,
         pose_graph,
