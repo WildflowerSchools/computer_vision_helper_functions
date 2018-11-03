@@ -932,13 +932,13 @@ class Pose3DGraph:
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
 
-# Class to define a motion model for each keypoint. We use a simple
-# constant-velocity model in which only position is observed. We specify
-# transition error (drift) for a reference time interval, so we can scale this
-# error for longer and shorter time intervals. If no observation error is
-# specified, the model can only be used for prediction. If no transition error
-# is specified, the model can only be used for observation.
-class KeypointMotionModel:
+# Class to define a model for each keypoint. We use a simple constant-velocity
+# model in which only position is observed. We specify transition error (drift)
+# for a reference time interval, so we can scale this error for longer and
+# shorter time intervals. If no observation error is specified, the model can
+# only be used for prediction. If no transition error is specified, the model
+# can only be used for observation.
+class KeypointModel:
     def __init__(
         self,
         reference_delta_t = None,
@@ -950,12 +950,12 @@ class KeypointMotionModel:
         self.reference_velocity_transition_error = reference_velocity_transition_error
         self.position_observation_error = position_observation_error
 
-    # Based on the keypoint motion model and a specified time interval, generate
-    # a complete linear Gaussian model (in the format expected by the smc_kalman
+    # Based on the keypoint model and a specified time interval, generate a
+    # complete linear Gaussian model (in the format expected by the smc_kalman
     # package). We allow for the possibility that no time interval is specified,
     # in which case the resulting linear Gaussian model can only be used for
-    # observation. not prediction
-    def keypoint_linear_gaussian_model(
+    # observation, not prediction
+    def linear_gaussian_model(
         self,
         delta_t = None):
         if delta_t is not None:
@@ -1066,7 +1066,7 @@ class Pose3DDistribution:
         keypoint_velocity_means,
         keypoint_position_error,
         keypoint_velocity_error,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observation):
         observation_tag = pose_3d_observation.tag
         initial_distribution =  cls.initialize(
@@ -1076,7 +1076,7 @@ class Pose3DDistribution:
             keypoint_velocity_error,
             tag = observation_tag)
         posterior_distribution = initial_distribution.incorporate_observation(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observation)
         return posterior_distribution
 
@@ -1124,15 +1124,15 @@ class Pose3DDistribution:
             keypoint_std_devs = self.keypoint_position_std_devs())
         return pose_3d
 
-    # Given a keypoint motion model and a time interval, apply the motion model
-    # to calculate the next 3D pose distribution. Keypoint motion model is an
-    # instance of the KeypointMotionModel class. User can specify time interval
-    # explicitly or method will attempt to infer from ending timestamp. Time
-    # unit is specified above. In the future, we may want to make underlying
-    # functions be able to handle time intervals with units.
+    # Given a keypoint model and a time interval, apply the model to calculate
+    # the next 3D pose distribution. Keypoint model is an instance of the
+    # KeypointModel class. User can specify time interval explicitly or method
+    # will attempt to infer from ending timestamp. Time unit is specified above.
+    # In the future, we may want to make underlying functions be able to handle
+    # time intervals with units
     def predict(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         delta_t = None,
         next_timestamp = None):
         current_keypoint_distributions = self.keypoint_distributions
@@ -1147,7 +1147,7 @@ class Pose3DDistribution:
         else:
             if current_timestamp is not None:
                 next_timestamp = current_timestamp + delta_t*time_unit
-        keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model(delta_t)
+        keypoint_linear_gaussian_model = keypoint_model.linear_gaussian_model(delta_t)
         next_keypoint_distributions = []
         for body_part_index in range(num_body_parts):
             next_keypoint_distribution = keypoint_linear_gaussian_model.predict(
@@ -1160,15 +1160,14 @@ class Pose3DDistribution:
             next_timestamp)
         return next_pose_3d_distribution
 
-    # Given a keypoint motion model and an observation of the 3D pose (specified
-    # as a Pose3D object), apply the motion model to calculate the posterior 3D
-    # pose distribution which incorporates the information from this
-    # observation. For any keypoints we don't observe, the keypoint distribution
-    # remains unchanged.Keypoint motion model is an instance of the
-    # KeypointMotionModel class
+    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Pose3D object), apply the model to calculate the posterior 3D pose
+    # distribution which incorporates the information from this observation. For
+    # any keypoints we don't observe, the keypoint distribution remains
+    # unchanged. Keypoint model is an instance of the KeypointModel class
     def incorporate_observation(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observation):
         prior_keypoint_distributions = self.keypoint_distributions
         prior_tag = self.tag
@@ -1176,7 +1175,7 @@ class Pose3DDistribution:
         observation_timestamp = pose_3d_observation.timestamp
         if prior_timestamp is not None and observation_timestamp is not None and prior_timestamp != observation_timestamp:
             raise ValueError('Timestamp on observation does not match timestamp on observed state')
-        keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model()
+        keypoint_linear_gaussian_model = keypoint_model.linear_gaussian_model()
         posterior_keypoint_distributions = []
         for body_part_index in range(num_body_parts):
             if pose_3d_observation.valid_keypoints[body_part_index]:
@@ -1200,36 +1199,36 @@ class Pose3DDistribution:
             posterior_timestamp)
         return posterior_pose_3d_distribution
 
-    # Given a keypoint motion model and an observation of the 3D pose (specified
-    # as a Pose3D object), apply the motion model to predict the distribution at
-    # the time of the observation and then calculate the posterior 3D pose
-    # distribution which incorporates the information from the observation
+    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Pose3D object), apply the model to predict the distribution at the time of
+    # the observation and then calculate the posterior 3D pose distribution
+    # which incorporates the information from the observation
     def predict_and_incorporate_observation(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observation):
         if pose_3d_observation.timestamp is None:
             raise ValueError('Observation must have timestamp in order to drive prediction step')
         observation_timestamp = pose_3d_observation.timestamp
         prior_distribution = self.predict(
-            keypoint_motion_model,
+            keypoint_model,
             next_timestamp = observation_timestamp)
         posterior_distribution = self.incorporate_observation(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observation)
         return posterior_distribution
 
-    # Given a keypoint motion model and an observation of the 3D pose (specified
-    # as a Pose3D object), calculate the Mahalanobis distance between the anchor
-    # point of the pose and the anchor point of the observation.Keypoint motion
-    # model is an instance of the KeypointMotionModel class
+    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Pose3D object), calculate the Mahalanobis distance between the anchor
+    # point of the pose and the anchor point of the observation. Keypoint  model
+    # is an instance of the KeypointModel class
     def observation_mahalanobis_distance(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observation):
         anchor_point_state_distribution = self.keypoint_distributions[neck_index]
         anchor_point_observation = pose_3d_observation.anchor_point()
-        keypoint_linear_gaussian_model = keypoint_motion_model.keypoint_linear_gaussian_model()
+        keypoint_linear_gaussian_model = keypoint_model.linear_gaussian_model()
         observation_mahalanobis_distance = keypoint_linear_gaussian_model.observation_mahalanobis_distance(
             anchor_point_state_distribution,
             anchor_point_observation)
@@ -1274,7 +1273,7 @@ class Pose3DTrack:
         keypoint_velocity_means,
         keypoint_position_error,
         keypoint_velocity_error,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observation):
         observation_tag = pose_3d_observation.tag
         initial_track = cls.initialize(
@@ -1284,7 +1283,7 @@ class Pose3DTrack:
             keypoint_velocity_error,
             tag = observation_tag)
         initial_track.incorporate_observation(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observation)
         return initial_track
 
@@ -1342,72 +1341,71 @@ class Pose3DTrack:
         pose_3d_distribution):
         self.pose_3d_distributions.append(pose_3d_distribution)
 
-    # Given a keypoint motion model and a time interval, apply the motion model
-    # to the last pose distribution in the track to calculate the next pose
-    # distribution and add this new pose distribution to the track. Keypoint
-    # motion model is an instance of the KeypointMotionModel class. User can
-    # specify time interval explicitly or method will attempt to infer from
-    # ending timestamp. Time unit is specified above. In the future, we may want
-    # to make underlying functions be able to handle time intervals with units.
+    # Given a keypoint model and a time interval, apply the model to the last
+    # pose distribution in the track to calculate the next pose distribution and
+    # add this new pose distribution to the track. Keypoint model is an instance
+    # of the KeypointModel class. User can specify time interval explicitly or
+    # method will attempt to infer from ending timestamp. Time unit is specified
+    # above. In the future, we may want to make underlying functions be able to
+    # handle time intervals with units.
     def predict(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         delta_t = None,
         next_timestamp = None):
         current_pose_3d_distribution = self.last()
         next_pose_3d_distribution = current_pose_3d_distribution.predict(
-            keypoint_motion_model,
+            keypoint_model,
             delta_t,
             next_timestamp)
         self.append(next_pose_3d_distribution)
 
-    # Given a keypoint motion model and an observation of the 3D pose (specified
-    # as a Pose3D object), apply the motion model to the last pose distribution
-    # in the track to calculate the posterior 3D pose distribution which
-    # incorporates the information from this observation. Replace the last pose
-    # distribution in the track with this posterior distribution. Keypoint
-    # motion model is an instance of the KeypointMotionModel class
+    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Pose3D object), apply the model to the last pose distribution in the track
+    # to calculate the posterior 3D pose distribution which incorporates the
+    # information from this observation. Replace the last pose distribution in
+    # the track with this posterior distribution. Keypoint model is an instance
+    # of the KeypointModel class
     def incorporate_observation(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observation):
         prior_pose_3d_distribution = self.last()
         posterior_pose_3d_distribution = prior_pose_3d_distribution.incorporate_observation(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observation)
         self.pose_3d_distributions[-1] = posterior_pose_3d_distribution
 
-    # Given a keypoint motion model and an observation of the 3D pose (specified
-    # as a Pose3D object), apply the motion model to the last pose distribution
-    # in the track to predict the distribution at the time of the observation
-    # and then calculate the posterior 3D pose distribution which incorporates
-    # the information from this observation. Add this new pose distribution to
-    # the track
+    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Pose3D object), apply the model to the last pose distribution in the track
+    # to predict the distribution at the time of the observation and then
+    # calculate the posterior 3D pose distribution which incorporates the
+    # information from this observation. Add this new pose distribution to the
+    # track
     def predict_and_incorporate_observation(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observation):
         if pose_3d_observation.timestamp is None:
             raise ValueError('Observation must have timestamp in order to drive prediction step')
         observation_timestamp = pose_3d_observation.timestamp
         self.predict(
-            keypoint_motion_model,
+            keypoint_model,
             next_timestamp = observation_timestamp)
         self.incorporate_observation(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observation)
 
-    # Given a keypoint motion model and an observation of a 3D pose (specified
-    # as a Pose3D object), calculate the Mahalanobis distance between the anchor
+    # Given a keypoint model and an observation of a 3D pose (specified as a
+    # Pose3D object), calculate the Mahalanobis distance between the anchor
     # point of the last pose distribution in the track and the anchor point of
-    # the observation. Keypoint motion model is an instance of the
-    # KeypointMotionModel class
+    # the observation. Keypoint model is an instance of the KeypointModel class
     def observation_mahalanobis_distance(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observation):
         observation_mahalanobis_distance = self.last().observation_mahalanobis_distance(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observation)
         return observation_mahalanobis_distance
 
@@ -1474,7 +1472,7 @@ class Pose3DTracks:
         initial_keypoint_velocity_means,
         initial_keypoint_position_error,
         initial_keypoint_velocity_error,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observations):
         if len(pose_3d_observations.pose_3d_list_list) != 1:
             raise ValueError('Observations must be a one-dimensional object')
@@ -1486,7 +1484,7 @@ class Pose3DTracks:
             initial_keypoint_velocity_error,
             num_tracks = num_observations)
         initial_tracks.incorporate_observations(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observations,
             selected_track_indices = range(num_observations),
             selected_observation_indices = range(num_observations))
@@ -1663,31 +1661,29 @@ class Pose3DTracks:
             self.active_tracks.append(new_track)
 
 
-    # Given a keypoint motion model and a time interval, apply the motion model
-    # to all tracks. Keypoint motion model is an instance of the
-    # KeypointMotionModel class. User can specify time interval explicitly or
-    # method will attempt to infer from ending timestamp. Time unit is specified
-    # above. In the future, we may want to make underlying functions be able to
-    # handle time intervals with units.
+    # Given a keypoint model and a time interval, apply the model to all tracks.
+    # Keypoint model is an instance of the KeypointModel class. User can specify
+    # time interval explicitly or method will attempt to infer from ending
+    # timestamp. Time unit is specified above. In the future, we may want to
+    # make underlying functions be able to handle time intervals with units.
     def predict(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         delta_t = None,
         next_timestamp = None):
         for active_track in self.active_tracks:
             active_track.predict(
-                keypoint_motion_model,
+                keypoint_model,
                 delta_t,
                 next_timestamp)
 
-    # Given a keypoint motion model and an observation of the 3D pose (specified
-    # as a Pose3D object), apply the motion model to selected tracks to
-    # calculate the posterior 3D pose distribution for those tracks. Leave other
-    # tracks unchanged. Keypoint motion model is an instance of the
-    # KeypointMotionModel class
+    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Pose3D object), apply the model to selected tracks to calculate the
+    # posterior 3D pose distribution for those tracks. Leave other tracks
+    # unchanged. Keypoint model is an instance of the KeypointModel class
     def incorporate_observations(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observations,
         selected_track_indices,
         selected_observation_indices):
@@ -1708,17 +1704,17 @@ class Pose3DTracks:
             track_index = selected_track_indices[index]
             observation_index = selected_observation_indices[index]
             self.active_tracks[track_index].incorporate_observation(
-                keypoint_motion_model,
+                keypoint_model,
                 pose_3d_observations_list[observation_index])
 
-    # Given a keypoint motion model and an observation of the 3D pose (specified
-    # as a Pose3D object), apply the motion model to predict the tracks at the
-    # time of the observations and then incorporate observations for selected
-    # tracks to calculate the posterior 3D pose distribution for those tracks.
-    # Leave other tracks unchanged
+    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Pose3D object), apply the model to predict the tracks at the time of the
+    # observations and then incorporate observations for selected tracks to
+    # calculate the posterior 3D pose distribution for those tracks. Leave other
+    # tracks unchanged
     def predict_and_incorporate_observations(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observations,
         selected_track_indices,
         selected_observation_indices):
@@ -1731,10 +1727,10 @@ class Pose3DTracks:
             raise ValueError('All observations must have timestamps and all timestamps must be equal')
         observation_timestamp = observation_timestamps[0]
         self.predict(
-            keypoint_motion_model,
+            keypoint_model,
             next_timestamp = observation_timestamp)
         self.incorporate_observations(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observations,
             selected_track_indices,
             selected_observation_indices)
@@ -1745,7 +1741,7 @@ class Pose3DTracks:
     # observations and tracks, and update the tracks accordingly
     def update(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observations,
         cost_threshold = 1.0,
         num_missed_observations_threshold = 3):
@@ -1757,10 +1753,10 @@ class Pose3DTracks:
             raise ValueError('Timestamps on observations are missing or not equal to each other')
         timestamp = timestamps[0]
         self.predict(
-            keypoint_motion_model,
+            keypoint_model,
             next_timestamp = timestamp)
         cost_matrix = self.cost_matrix(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observations)
         matched_track_indices, matched_observation_indices = scipy.optimize.linear_sum_assignment(cost_matrix)
         matched_track_indices = matched_track_indices.tolist()
@@ -1773,7 +1769,7 @@ class Pose3DTracks:
         unmatched_track_indices = list(set(range(self.num_active_tracks())) - set(matched_track_indices))
         unmatched_observation_indices = list(set(range(len(pose_3d_observations_list))) - set(matched_observation_indices))
         self.incorporate_observations(
-            keypoint_motion_model,
+            keypoint_model,
             pose_3d_observations,
             matched_track_indices,
             matched_observation_indices)
@@ -1784,15 +1780,15 @@ class Pose3DTracks:
         for unmatched_observation_index in unmatched_observation_indices:
             self.add_new_tracks(num_new_tracks = 1)
             self.active_tracks[-1].incorporate_observation(
-                keypoint_motion_model,
+                keypoint_model,
                 pose_3d_observations_list[unmatched_observation_index])
 
-    # Given a keypoint motion model and a set of 3D pose observations (specified
-    # as a list of Pose3D objects), calculate the cost matrix between the last
-    # 3D pose distributions in the active tracks and the observations
+    # Given a keypoint model and a set of 3D pose observations (specified as a
+    # list of Pose3D objects), calculate the cost matrix between the last 3D
+    # pose distributions in the active tracks and the observations
     def cost_matrix(
         self,
-        keypoint_motion_model,
+        keypoint_model,
         pose_3d_observations):
         if len(pose_3d_observations.pose_3d_list_list) != 1:
             raise ValueError('Observations must be a one-dimensional object')
@@ -1805,7 +1801,7 @@ class Pose3DTracks:
             for observation_index in range(num_observations):
                 observation = pose_3d_observations_list[observation_index]
                 cost_matrix[active_track_index, observation_index] = active_track.observation_mahalanobis_distance(
-                    keypoint_motion_model,
+                    keypoint_model,
                     observation)
         return cost_matrix
 
