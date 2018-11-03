@@ -617,7 +617,7 @@ class Poses3D:
     def from_keypoints(
         cls,
         keypoints,
-        timestamps = None):
+        timestamp = None):
         keypoints = np.asarray(keypoints)
         if keypoints.ndim > 3 or keypoints.ndim < 2:
             raise ValueError('Keypoints array needs to be 3-dimensional or 2-dimensional')
@@ -626,7 +626,9 @@ class Poses3D:
         num_poses = keypoints.shape[0]
         pose_3d_list = []
         for pose_index in range(num_poses):
-            pose_3d = Pose3D.from_keypoints(keypoints[pose_index], timestamp = timestamps[pose_index])
+            pose_3d = Pose3D.from_keypoints(
+                keypoints[pose_index],
+                timestamp = timestamp)
             pose_3d_list.append(pose_3d)
         pose_3d_list_list = [pose_3d_list]
         return cls(pose_3d_list_list)
