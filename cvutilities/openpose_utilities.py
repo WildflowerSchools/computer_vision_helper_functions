@@ -191,9 +191,11 @@ class Pose2D:
         cvutilities.camera_utilities.format_2d_image_plot(image_size)
         plt.show()
 
-# Class to hold the data from a collection of 2D poses. Internal structure is a
-# list of lists of 2DPose objects (multiple cameras, multiple poses per camera)
-# and (possibly) a list of source images (multiple cameras)
+# Class to represent a generic collection of 2D poses, either a set of poses (as
+# from a single camera) or a set of set of poses (as from multiple cameras at a
+# single moment in time). Internal structure is a list of lists of Pose2D objects. When working with
+# one-dimensional collections, input methods add the additional dimension and
+# output methods remove the addtional dimension as necessary
 class Poses2D:
     def __init__(
         self,
@@ -595,12 +597,13 @@ class Pose3D:
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
 
-# Class to hold the data for a generic collection of 3D poses, either a set of
-# poses over time (as from a pose track) or a set of poses at a single point in
-# time (as from the last poses in a set of pose tracks) or set of sets of poses
-# over time (as from a collection of pose tracks). Internal structure is a list
-# of lists of Pose3D objects. Output functions attempt to strip off the outer
-# list when appropriate
+# Class to represent a generic collection of 3D poses, either a set of poses
+# over time (as from a pose track) or a set of poses at a single point in time
+# (as from a set of observations or the last poses in a set of pose tracks) or
+# set of sets of poses over time (as from a collection of pose tracks). Internal
+# structure is a list of lists of Pose3D objects. When working with
+# one-dimensional collections, input methods add the additional dimension and
+# output methods remove the addtional dimension as necessary
 class Poses3D:
     def __init__(
         self,
@@ -701,7 +704,8 @@ class Poses3D:
             plt.show()
 
 # Class to hold the data for a collection of 3D poses reconstructed from 2D
-# poses across multiple cameras at a single moment in time
+# poses across multiple cameras at a single moment in time. This data has a
+# natural graph structure, with 2D poses as the nodes and 3D poses as the edges
 class Pose3DGraph:
     def __init__(
         self,
