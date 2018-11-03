@@ -1585,12 +1585,15 @@ class Pose3DTracks:
         num_selected_observations = selected_observation_indices.shape[0]
         if num_selected_tracks != num_selected_observations:
             raise ValueError('Number of selected observations does not match number of selected tracks')
+        if len(pose_3d_observations.pose_3d_list_list) != 1:
+            raise ValueError('Observations must be a one-dimensional object')
+        pose_3d_observations_list = pose_3d_observations.pose_3d_list_list[0]
         for index in range(num_selected_tracks):
             track_index = selected_track_indices[index]
             observation_index = selected_observation_indices[index]
             self.active_tracks[track_index].incorporate_observation(
                 keypoint_motion_model,
-                pose_3d_observations[observation_index])
+                pose_3d_observations_list[observation_index])
 
     # Given a set of observations, predict the 3D pose distributions of the
     # active tracks at the time of the observations, compare the observations to
@@ -1602,7 +1605,10 @@ class Pose3DTracks:
         pose_3d_observations,
         cost_threshold = 1.0,
         num_missed_observations_threshold = 3):
-        timestamps = np.array([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations])
+        if len(pose_3d_observations.pose_3d_list_list) != 1:
+            raise ValueError('Observations must be a one-dimensional object')
+        pose_3d_observations_list = pose_3d_observations.pose_3d_list_list[0]
+        timestamps = np.array([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations_list])
         if np.any(timestamps != timestamps[0]):
             raise ValueError('Timestamps on observations are missing or not equal to each other')
         timestamp = timestamps[0]
@@ -1621,7 +1627,7 @@ class Pose3DTracks:
                 del matched_track_indices[index]
                 del matched_observation_indices[index]
         unmatched_track_indices = list(set(range(self.num_active_tracks())) - set(matched_track_indices))
-        unmatched_observation_indices = list(set(range(len(pose_3d_observations))) - set(matched_observation_indices))
+        unmatched_observation_indices = list(set(range(len(pose_3d_observations_list))) - set(matched_observation_indices))
         self.incorporate_observations(
             keypoint_motion_model,
             pose_3d_observations,
@@ -1635,7 +1641,7 @@ class Pose3DTracks:
             self.add_new_tracks(num_new_tracks = 1)
             self.active_tracks[-1].incorporate_observation(
                 keypoint_motion_model,
-                pose_3d_observations[unmatched_observation_index])
+                pose_3d_observations_list[unmatched_observation_index])
 
     # Given a keypoint motion model and a set of 3D pose observations (specified
     # as a list of Pose3D objects), calculate the cost matrix between the last
@@ -1644,13 +1650,16 @@ class Pose3DTracks:
         self,
         keypoint_motion_model,
         pose_3d_observations):
+        if len(pose_3d_observations.pose_3d_list_list) != 1:
+            raise ValueError('Observations must be a one-dimensional object')
+        pose_3d_observations_list = pose_3d_observations.pose_3d_list_list[0]
         num_active_tracks = self.num_active_tracks()
-        num_observations = len(pose_3d_observations)
+        num_observations = len(pose_3d_observations_list)
         cost_matrix = np.zeros((num_active_tracks, num_observations))
         for active_track_index in range(num_active_tracks):
             active_track = self.active_tracks[active_track_index]
             for observation_index in range(num_observations):
-                observation = pose_3d_observations[observation_index]
+                observation = pose_3d_observations_list[observation_index]
                 cost_matrix[active_track_index, observation_index] = active_track.observation_mahalanobis_distance(
                     keypoint_motion_model,
                     observation)
