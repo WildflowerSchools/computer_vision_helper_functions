@@ -438,6 +438,21 @@ class Pose3D:
         self.timestamp = timestamp
         self.keypoint_std_devs = keypoint_std_devs
 
+    # Build a 3D pose object from a simple array of keypoints. Assume that
+    # non-valid keypoints are indicated by Numpy NAN values
+    @classmethod
+    def from_keypoints(
+        cls,
+        keypoints,
+        tag = None,
+        timestamp = None):
+        valid_keypoints = np.logical_not(np.isnan(keypoints[:, 0]))
+        return cls(
+            keypoints,
+            valid_keypoints,
+            tag = tag,
+            timestamp = timestamp)
+
     # Calculate a 3D pose by triangulating between two 2D poses from two
     # different cameras
     @classmethod
@@ -591,6 +606,26 @@ class Pose3DListList:
         self,
         pose_3d_list_list):
         self.pose_3d_list_list = pose_3d_list_list
+
+    # Build a 3D poses object from a simple array of keypoints. Assume that
+    # non-valid keypoints are indicated by Numpy NAN values
+    @classmethod
+    def from_keypoints(
+        cls,
+        keypoints,
+        timestamps = None):
+        keypoints = np.asarray(keypoints)
+        if keypoints.ndim > 3 or keypoints.ndim < 2:
+            raise ValueError('Keypoints array needs to be 3-dimensional or 2-dimensional')
+        if keypoints.ndim == 2:
+            keypoints = np.expand_dims(keypoints, 0)
+        num_poses = keypoints.shape[0]
+        pose_3d_list = []
+        for pose_index in range(num_poses):
+            pose_3d = Pose3D.from_keypoints(keypoints[pose_index], timestamp = timestamps[pose_index])
+            pose_3d_list.append(pose_3d)
+        pose_3d_list_list = [pose_3d_list]
+        return cls(pose_3d_list_list)
 
     # Return the number of 3D poses in the lists
     def num_3d_poses(self):
