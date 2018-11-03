@@ -193,9 +193,10 @@ class Pose2D:
 
 # Class to represent a generic collection of 2D poses, either a set of poses (as
 # from a single camera) or a set of set of poses (as from multiple cameras at a
-# single moment in time). Internal structure is a list of lists of Pose2D objects. When working with
-# one-dimensional collections, input methods add the additional dimension and
-# output methods remove the addtional dimension as necessary
+# single moment in time). Internal structure is a list of lists of Pose2D
+# objects. When working with one-dimensional collections, input methods add the
+# additional dimension and output methods remove the addtional dimension as
+# necessary
 class Poses2D:
     def __init__(
         self,
@@ -1176,6 +1177,25 @@ class Pose3DDistribution:
         return posterior_pose_3d_distribution
 
     # Given a keypoint motion model and an observation of the 3D pose (specified
+    # as a Pose3D object), apply the motion model to predict the distribution at
+    # the time of the observation and then calculate the posterior 3D pose
+    # distribution which incorporates the information from the observation
+    def predict_and_incorporate_observation(
+        self,
+        keypoint_motion_model,
+        pose_3d_observation):
+        if pose_3d_observation.timestamp is None:
+            raise ValueError('Observation must have timestamp in order to drive prediction step')
+        observation_timestamp = pose_3d_observation.timestamp
+        prior_distribution = self.predict(
+            keypoint_motion_model,
+            next_timestamp = observation_timestamp)
+        posterior_distribution = self.incorporate_observation(
+            keypoint_motion_model,
+            pose_3d_observation)
+        return posterior_distribution
+
+    # Given a keypoint motion model and an observation of the 3D pose (specified
     # as a Pose3D object), calculate the Mahalanobis distance between the anchor
     # point of the pose and the anchor point of the observation.Keypoint motion
     # model is an instance of the KeypointMotionModel class
@@ -1310,6 +1330,26 @@ class Pose3DTrack:
             keypoint_motion_model,
             pose_3d_observation)
         self.pose_3d_distributions[-1] = posterior_pose_3d_distribution
+
+    # Given a keypoint motion model and an observation of the 3D pose (specified
+    # as a Pose3D object), apply the motion model to the last pose distribution
+    # in the track to predict the distribution at the time of the observation
+    # and then calculate the posterior 3D pose distribution which incorporates
+    # the information from this observation. Add this new pose distribution to
+    # the track
+    def predict_and_incorporate_observation(
+        self,
+        keypoint_motion_model,
+        pose_3d_observation):
+        if pose_3d_observation.timestamp is None:
+            raise ValueError('Observation must have timestamp in order to drive prediction step')
+        observation_timestamp = pose_3d_observation.timestamp
+        self.predict(
+            keypoint_motion_model,
+            next_timestamp = observation_timestamp)
+        self.incorporate_observation(
+            keypoint_motion_model,
+            pose_3d_observation)
 
     # Given a keypoint motion model and an observation of a 3D pose (specified
     # as a Pose3D object), calculate the Mahalanobis distance between the anchor
@@ -1598,6 +1638,34 @@ class Pose3DTracks:
             self.active_tracks[track_index].incorporate_observation(
                 keypoint_motion_model,
                 pose_3d_observations_list[observation_index])
+
+    # Given a keypoint motion model and an observation of the 3D pose (specified
+    # as a Pose3D object), apply the motion model to predict the tracks at the
+    # time of the observations and then incorporate observations for selected
+    # tracks to calculate the posterior 3D pose distribution for those tracks.
+    # Leave other tracks unchanged
+    def predict_and_incorporate_observations(
+        self,
+        keypoint_motion_model,
+        pose_3d_observations,
+        selected_track_indices,
+        selected_observation_indices):
+        selected_track_indices = np.array(selected_track_indices)
+        selected_observation_indices = np.array(selected_observation_indices)
+        if len(pose_3d_observations.pose_3d_list_list) != 1:
+            raise ValueError('Observations must be a one-dimensional object')
+        observation_timestamps = np.asarray([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations.pose_3d_list_list[0]])
+        if np.any(observation_timestamps != observation_timestamps[0]):
+            raise ValueError('All observations must have timestamps and all timestamps must be equal')
+        observation_timestamp = observation_timestamps[0]
+        self.predict(
+            keypoint_motion_model,
+            next_timestamp = observation_timestamp)
+        self.incorporate_observations(
+            keypoint_motion_model,
+            pose_3d_observations,
+            selected_track_indices,
+            selected_observation_indices)
 
     # Given a set of observations, predict the 3D pose distributions of the
     # active tracks at the time of the observations, compare the observations to
