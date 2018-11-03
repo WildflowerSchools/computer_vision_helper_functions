@@ -1002,6 +1002,33 @@ class KeypointModel:
             keypoint_control_model)
         return keypoint_linear_gaussian_model
 
+# Class to define the initial parameters of a 3D pose distribution
+class PoseInitializationModel:
+    def __init__(
+        self,
+        initial_keypoint_position_means,
+        initial_keypoint_velocity_means,
+        initial_keypoint_position_error,
+        initial_keypoint_velocity_error):
+        initial_keypoint_position_means = np.asarray(initial_keypoint_position_means)
+        initial_keypoint_velocity_means = np.asarray(initial_keypoint_velocity_means)
+        initial_keypoint_position_error = np.asarray(initial_keypoint_position_error)
+        initial_keypoint_velocity_error = np.asarray(initial_keypoint_velocity_error)
+        if initial_keypoint_position_means.shape != (num_body_parts, 3):
+            raise ValueError('Initial position means array does not appear to be of shape ({}, 3)'.format(num_body_parts))
+        if initial_keypoint_velocity_means.shape != (num_body_parts, 3):
+            raise ValueError('Initial velocity means array does not appear to be of shape ({}, 3)'.format(num_body_parts))
+        if initial_keypoint_position_error.size != 1:
+            raise ValueError('Initial position error does not appear to be a scalar'.format(num_body_parts))
+        if initial_keypoint_velocity_error.size != 1:
+            raise ValueError('Initial velocity error does not appear to be a scalar'.format(num_body_parts))
+        initial_keypoint_position_error = np.asscalar(initial_keypoint_position_error)
+        initial_keypoint_velocity_error = np.asscalar(initial_keypoint_velocity_error)
+        self.initial_keypoint_position_means = initial_keypoint_position_means
+        self.initial_keypoint_velocity_means = initial_keypoint_velocity_means
+        self.initial_keypoint_position_error = initial_keypoint_position_error
+        self.initial_keypoint_velocity_error = initial_keypoint_velocity_error
+
 # Class to hold the data for a set of Gaussian distributions describing a 3D
 # pose (one three-dimensional Gaussian distribution describing the position and
 # velocity of each body part). Internal structure is a list of
@@ -1022,33 +1049,18 @@ class Pose3DDistribution:
     @classmethod
     def initialize(
         cls,
-        keypoint_position_means,
-        keypoint_velocity_means,
-        keypoint_position_error,
-        keypoint_velocity_error,
+        pose_initialization_model,
         tag = None,
         timestamp = None):
-        keypoint_position_means = np.asarray(keypoint_position_means)
-        keypoint_velocity_means = np.asarray(keypoint_velocity_means)
-        keypoint_position_error = np.asarray(keypoint_position_error)
-        keypoint_velocity_error = np.asarray(keypoint_velocity_error)
-        if keypoint_position_means.shape != (num_body_parts, 3):
-            raise ValueError('Initial position means array does not appear to be of shape ({}, 3)'.format(num_body_parts))
-        if keypoint_velocity_means.shape != (num_body_parts, 3):
-            raise ValueError('Initial velocity means array does not appear to be of shape ({}, 3)'.format(num_body_parts))
-        if keypoint_position_error.size != 1:
-            raise ValueError('Initial position error does not appear to be a scalar'.format(num_body_parts))
-        if keypoint_velocity_error.size != 1:
-            raise ValueError('Initial velocity error does not appear to be a scalar'.format(num_body_parts))
-        keypoint_position_error = np.asscalar(keypoint_position_error)
-        keypoint_velocity_error = np.asscalar(keypoint_velocity_error)
         keypoint_covariance = np.diagflat(
             np.concatenate((
-                np.repeat(keypoint_position_error**2,3),
-                np.repeat(keypoint_velocity_error**2, 3))))
+                np.repeat(pose_initialization_model.initial_keypoint_position_error**2,3),
+                np.repeat(pose_initialization_model.initial_keypoint_velocity_error**2, 3))))
         keypoint_distributions=[]
         for body_part_index in range(num_body_parts):
-            keypoint_mean = np.concatenate((keypoint_position_means[body_part_index], keypoint_velocity_means[body_part_index]))
+            keypoint_mean = np.concatenate((
+                pose_initialization_model.initial_keypoint_position_means[body_part_index],
+                pose_initialization_model.initial_keypoint_velocity_means[body_part_index]))
             keypoint_distribution = smc_kalman.GaussianDistribution(
                 keypoint_mean,
                 keypoint_covariance)
@@ -1062,18 +1074,12 @@ class Pose3DDistribution:
     @classmethod
     def initialize_and_incorporate_observation(
         cls,
-        keypoint_position_means,
-        keypoint_velocity_means,
-        keypoint_position_error,
-        keypoint_velocity_error,
+        pose_initialization_model,
         keypoint_model,
         pose_3d_observation):
         observation_tag = pose_3d_observation.tag
         initial_distribution =  cls.initialize(
-            keypoint_position_means,
-            keypoint_velocity_means,
-            keypoint_position_error,
-            keypoint_velocity_error,
+            pose_initialization_model,
             tag = observation_tag)
         posterior_distribution = initial_distribution.incorporate_observation(
             keypoint_model,
@@ -1250,17 +1256,11 @@ class Pose3DTrack:
     @classmethod
     def initialize(
         cls,
-        keypoint_position_means,
-        keypoint_velocity_means,
-        keypoint_position_error,
-        keypoint_velocity_error,
+        pose_initialization_model,
         tag = None,
         timestamp = None):
         pose_3d_distributions = [Pose3DDistribution.initialize(
-            keypoint_position_means,
-            keypoint_velocity_means,
-            keypoint_position_error,
-            keypoint_velocity_error,
+            pose_initialization_model,
             tag,
             timestamp)]
         return cls(pose_3d_distributions)
@@ -1269,18 +1269,12 @@ class Pose3DTrack:
     @classmethod
     def initialize_and_incorporate_observation(
         cls,
-        keypoint_position_means,
-        keypoint_velocity_means,
-        keypoint_position_error,
-        keypoint_velocity_error,
+        pose_initialization_model,
         keypoint_model,
         pose_3d_observation):
         observation_tag = pose_3d_observation.tag
         initial_track = cls.initialize(
-            keypoint_position_means,
-            keypoint_velocity_means,
-            keypoint_position_error,
-            keypoint_velocity_error,
+            pose_initialization_model,
             tag = observation_tag)
         initial_track.incorporate_observation(
             keypoint_model,
@@ -1418,10 +1412,7 @@ class Pose3DTracks:
         self,
         active_tracks = None,
         inactive_tracks = None,
-        initial_keypoint_position_means = None,
-        initial_keypoint_velocity_means = None,
-        initial_keypoint_position_error = None,
-        initial_keypoint_velocity_error = None):
+        pose_initialization_model = None):
         if active_tracks is not None:
             check_last_timestamps(active_tracks)
         if active_tracks is None:
@@ -1430,58 +1421,40 @@ class Pose3DTracks:
             inactive_tracks = []
         self.active_tracks = active_tracks
         self.inactive_tracks = inactive_tracks
-        self.initial_keypoint_position_means = initial_keypoint_position_means
-        self.initial_keypoint_velocity_means = initial_keypoint_velocity_means
-        self.initial_keypoint_position_error = initial_keypoint_position_error
-        self.initial_keypoint_velocity_error = initial_keypoint_velocity_error
+        self.pose_initialization_model = pose_initialization_model
 
     # Initialize the tracks
     @classmethod
     def initialize(
         cls,
-        initial_keypoint_position_means,
-        initial_keypoint_velocity_means,
-        initial_keypoint_position_error,
-        initial_keypoint_velocity_error,
+        pose_initialization_model,
         tag = None,
         timestamp = None,
         num_tracks = 1):
         active_tracks=[]
         for track_index in range(num_tracks):
             track = Pose3DTrack.initialize(
-                initial_keypoint_position_means,
-                initial_keypoint_velocity_means,
-                initial_keypoint_position_error,
-                initial_keypoint_velocity_error,
+                pose_initialization_model,
                 tag = None,
                 timestamp = None)
             active_tracks.append(track)
         return cls(
             active_tracks = active_tracks,
             inactive_tracks = None,
-            initial_keypoint_position_means = initial_keypoint_position_means,
-            initial_keypoint_velocity_means = initial_keypoint_velocity_means,
-            initial_keypoint_position_error = initial_keypoint_position_error,
-            initial_keypoint_velocity_error = initial_keypoint_velocity_error)
+            pose_initialization_model = pose_initialization_model)
 
     # Initialize the tracks and incorporate an initial set of observations
     @classmethod
     def initialize_and_incorporate_observations(
         cls,
-        initial_keypoint_position_means,
-        initial_keypoint_velocity_means,
-        initial_keypoint_position_error,
-        initial_keypoint_velocity_error,
+        pose_initialization_model,
         keypoint_model,
         pose_3d_observations):
         if len(pose_3d_observations.pose_3d_list_list) != 1:
             raise ValueError('Observations must be a one-dimensional object')
         num_observations = len(pose_3d_observations.pose_3d_list_list[0])
         initial_tracks = cls.initialize(
-            initial_keypoint_position_means,
-            initial_keypoint_velocity_means,
-            initial_keypoint_position_error,
-            initial_keypoint_velocity_error,
+            pose_initialization_model,
             num_tracks = num_observations)
         initial_tracks.incorporate_observations(
             keypoint_model,
@@ -1653,10 +1626,7 @@ class Pose3DTracks:
             timestamp = None
         for new_track_index in range(num_new_tracks):
             new_track = Pose3DTrack.initialize(
-                self.initial_keypoint_position_means,
-                self.initial_keypoint_velocity_means,
-                self.initial_keypoint_position_error,
-                self.initial_keypoint_velocity_error,
+                self.pose_initialization_model,
                 timestamp = timestamp)
             self.active_tracks.append(new_track)
 
