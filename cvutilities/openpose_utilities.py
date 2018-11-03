@@ -1056,6 +1056,28 @@ class Pose3DDistribution:
             tag,
             timestamp)
 
+    # Initialize the distributions and incorporate an observation
+    @classmethod
+    def initialize_and_incorporate_observation(
+        cls,
+        keypoint_position_means,
+        keypoint_velocity_means,
+        keypoint_position_error,
+        keypoint_velocity_error,
+        keypoint_motion_model,
+        pose_3d_observation):
+        observation_tag = pose_3d_observation.tag
+        initial_distribution =  cls.initialize(
+            keypoint_position_means,
+            keypoint_velocity_means,
+            keypoint_position_error,
+            keypoint_velocity_error,
+            tag = observation_tag)
+        posterior_distribution = initial_distribution.incorporate_observation(
+            keypoint_motion_model,
+            pose_3d_observation)
+        return posterior_distribution
+
     # Return keypoint means
     def keypoint_means(self):
         return np.asarray([keypoint_distribution.mean for keypoint_distribution in self.keypoint_distributions])
@@ -1242,6 +1264,28 @@ class Pose3DTrack:
             timestamp)]
         return cls(pose_3d_distributions)
 
+    # Initialize the track and incorporate an initial observation
+    @classmethod
+    def initialize_and_incorporate_observation(
+        cls,
+        keypoint_position_means,
+        keypoint_velocity_means,
+        keypoint_position_error,
+        keypoint_velocity_error,
+        keypoint_motion_model,
+        pose_3d_observation):
+        observation_tag = pose_3d_observation.tag
+        initial_track = cls.initialize(
+            keypoint_position_means,
+            keypoint_velocity_means,
+            keypoint_position_error,
+            keypoint_velocity_error,
+            tag = observation_tag)
+        initial_track.incorporate_observation(
+            keypoint_motion_model,
+            pose_3d_observation)
+        return initial_track
+
     # Return timestamps
     def timestamps(self):
         return np.asarray([pose_3d_distribution.timestamp for pose_3d_distribution in self.pose_3d_distributions])
@@ -1419,6 +1463,32 @@ class Pose3DTracks:
             initial_keypoint_velocity_means = initial_keypoint_velocity_means,
             initial_keypoint_position_error = initial_keypoint_position_error,
             initial_keypoint_velocity_error = initial_keypoint_velocity_error)
+
+    # Initialize the tracks and incorporate an initial set of observations
+    @classmethod
+    def initialize_and_incorporate_observations(
+        cls,
+        initial_keypoint_position_means,
+        initial_keypoint_velocity_means,
+        initial_keypoint_position_error,
+        initial_keypoint_velocity_error,
+        keypoint_motion_model,
+        pose_3d_observations):
+        if len(pose_3d_observations.pose_3d_list_list) != 1:
+            raise ValueError('Observations must be a one-dimensional object')
+        num_observations = len(pose_3d_observations.pose_3d_list_list[0])
+        initial_tracks = cls.initialize(
+            initial_keypoint_position_means,
+            initial_keypoint_velocity_means,
+            initial_keypoint_position_error,
+            initial_keypoint_velocity_error,
+            num_tracks = num_observations)
+        initial_tracks.incorporate_observations(
+            keypoint_motion_model,
+            pose_3d_observations,
+            selected_track_indices = range(num_observations),
+            selected_observation_indices = range(num_observations))
+        return initial_tracks
 
     # Return number of active tracks
     def num_active_tracks(self):
