@@ -601,7 +601,7 @@ class Pose3D:
 # over time (as from a collection of pose tracks). Internal structure is a list
 # of lists of Pose3D objects. Output functions attempt to strip off the outer
 # list when appropriate
-class Pose3DListList:
+class Poses3D:
     def __init__(
         self,
         pose_3d_list_list):
@@ -1257,7 +1257,7 @@ class Pose3DTrack:
     # Construct and return a list of 3D poses with the mean position keypoints
     # of the distributions in the track
     def to_poses_3d(self):
-        poses_3d = Pose3DListList([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in self.pose_3d_distributions]])
+        poses_3d = Poses3D([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in self.pose_3d_distributions]])
         return poses_3d
 
     # Construct and return the 3D pose with the mean position keypoints
@@ -1423,7 +1423,7 @@ class Pose3DTracks:
     # Construct and return a list of lists of 3D poses with the mean position
     # keypoints of the distributions in the active tracks
     def active_to_poses_3d(self):
-        poses_3d = Pose3DListList([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in active_track.pose_3d_distributions] for active_track in self.active_tracks])
+        poses_3d = Poses3D([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in active_track.pose_3d_distributions] for active_track in self.active_tracks])
         return poses_3d
 
     # Return timestamps for inactive tracks
@@ -1465,7 +1465,7 @@ class Pose3DTracks:
     # Construct and return a list of lists of 3D poses with the mean position
     # keypoints of the distributions in the inactive tracks
     def inactive_to_poses_3d(self):
-        poses_3d = Pose3DListList([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in inactive_track.pose_3d_distributions] for inactive_track in self.inactive_tracks])
+        poses_3d = Poses3D([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in inactive_track.pose_3d_distributions] for inactive_track in self.inactive_tracks])
         return poses_3d
 
     # Return timestamps for last distributions in each active track
@@ -1507,7 +1507,7 @@ class Pose3DTracks:
     # of the last distributions in the active tracks
     def last_to_poses_3d(self):
         poses_3d = [[active_track.last().to_pose_3d() for active_track in self.active_tracks]]
-        return Pose3DListList(poses_3d)
+        return Poses3D(poses_3d)
 
     # Move a track from active to inactive
     def deactivate_track(
