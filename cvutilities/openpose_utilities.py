@@ -4,6 +4,7 @@ import smc_kalman
 import boto3
 import networkx as nx # We use NetworkX graph structures to hold the 3D pose data
 import numpy as np
+import pandas as pd
 import scipy.optimize
 import matplotlib.pyplot as plt
 import json
@@ -682,6 +683,16 @@ class Poses3D:
             return tags_list[0]
         else:
             return tags_list
+
+    # Return a dataframe with multiple strands of dataframe
+    def dataframe(self):
+        dataframe = pd.DataFrame({
+            'timestamp': self.timestamps(),
+            'keypoints': [np.array(keypoints) for keypoints in self.keypoints().tolist()],
+            'valid_keypoints': [np.array(valid_keypoints) for valid_keypoints in self.valid_keypoints().tolist()],
+            'keypoint_std_devs': [np.array(keypoint_std_devs) for keypoint_std_devs in self.keypoint_std_devs().tolist()],
+            'tag': self.tags()})
+        return(dataframe)
 
     # Return the timestamps for all of the 3D poses in the lists
     def timestamps(self):
