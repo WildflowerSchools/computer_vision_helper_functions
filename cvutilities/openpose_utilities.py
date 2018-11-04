@@ -1251,9 +1251,11 @@ class Pose3DTrack:
         self,
         keypoint_model,
         pose_3d_distributions,
+        track_id = None,
         num_missed_observations = 0):
         self.keypoint_model = keypoint_model
         self.pose_3d_distributions = pose_3d_distributions
+        self.track_id = track_id
         self.num_missed_observations = num_missed_observations
 
     # Initialize the track
@@ -1264,6 +1266,7 @@ class Pose3DTrack:
         keypoint_model,
         tag = None,
         timestamp = None,
+        track_id = None,
         pose_3d_observation = None):
         pose_3d_distributions = [Pose3DDistribution.initialize(
             pose_initialization_model,
@@ -1271,7 +1274,8 @@ class Pose3DTrack:
             timestamp)]
         initial_track = cls(
             keypoint_model,
-            pose_3d_distributions)
+            pose_3d_distributions,
+            track_id = track_id)
         if pose_3d_observation is not None:
             initial_track.incorporate_observation(pose_3d_observation)
         return initial_track
@@ -1415,7 +1419,8 @@ class Pose3DTracks:
         keypoint_model,
         pose_tracking_model,
         active_tracks = None,
-        inactive_tracks = None):
+        inactive_tracks = None,
+        next_track_id = 0):
         if active_tracks is not None:
             check_last_timestamps(active_tracks)
         if active_tracks is None:
@@ -1427,6 +1432,7 @@ class Pose3DTracks:
         self.pose_tracking_model = pose_tracking_model
         self.active_tracks = active_tracks
         self.inactive_tracks = inactive_tracks
+        self.next_track_id = next_track_id
 
     # Initialize the tracks
     @classmethod
@@ -1453,14 +1459,16 @@ class Pose3DTracks:
                 pose_initialization_model,
                 keypoint_model,
                 tag = None,
-                timestamp = None)
+                timestamp = None,
+                track_id = track_index)
             active_tracks.append(track)
         initial_tracks = cls(
             pose_initialization_model = pose_initialization_model,
             keypoint_model = keypoint_model,
             pose_tracking_model = pose_tracking_model,
             active_tracks = active_tracks,
-            inactive_tracks = None)
+            inactive_tracks = None,
+            next_track_id = num_tracks)
         if pose_3d_observations is not None:
             initial_tracks.incorporate_observations(
                 pose_3d_observations,
@@ -1479,6 +1487,10 @@ class Pose3DTracks:
     # Return timestamps for active tracks
     def active_timestamps(self):
         return [np.array([pose_3d_distribution.timestamp for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
+
+    # Return track IDs for active tracks
+    def active_track_ids(self):
+        return np.array([active_track.track_id for active_track in self.active_tracks])
 
     # Return number of missed observations for active tracks
     def active_num_missed_observations(self):
@@ -1522,12 +1534,10 @@ class Pose3DTracks:
     # tracks
     def active_dataframe(self):
         num_active_tracks = len(self.active_tracks)
-        num_inactive_tracks = len(self.inactive_tracks)
         dataframe_list = []
         for track_index in range(num_active_tracks):
-            track_id = track_index + num_inactive_tracks
             dataframe = self.active_tracks[track_index].dataframe()
-            dataframe.insert(0, 'track_id', track_id)
+            dataframe.insert(0, 'track_id', self.active_tracks[track_index].track_id)
             dataframe_list.append(dataframe)
         combined_dataframe = pd.concat(dataframe_list, ignore_index = True)
         combined_dataframe.insert(1, 'track_status', 'active')
@@ -1536,6 +1546,10 @@ class Pose3DTracks:
     # Return timestamps for inactive tracks
     def inactive_timestamps(self):
         return [np.array([pose_3d_distribution.timestamp for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
+
+    # Return track IDs for inactive tracks
+    def inactive_track_ids(self):
+        return np.array([inactive_track.track_id for inactive_track in self.inactive_tracks])
 
     # Return number of missed observations for inactive tracks
     def inactive_num_missed_observations(self):
@@ -1578,13 +1592,11 @@ class Pose3DTracks:
     # Construct and return a dataframe with the data from the inactive
     # tracks
     def inactive_dataframe(self):
-        num_active_tracks = len(self.active_tracks)
         num_inactive_tracks = len(self.inactive_tracks)
         dataframe_list = []
         for track_index in range(num_inactive_tracks):
-            track_id = track_index
             dataframe = self.inactive_tracks[track_index].dataframe()
-            dataframe.insert(0, 'track_id', track_id)
+            dataframe.insert(0, 'track_id', self.inactive_tracks[track_index].track_id)
             dataframe_list.append(dataframe)
         combined_dataframe = pd.concat(dataframe_list, ignore_index = True)
         combined_dataframe.insert(1, 'track_status', 'inactive')
@@ -1673,7 +1685,9 @@ class Pose3DTracks:
             new_track = Pose3DTrack.initialize(
                 self.pose_initialization_model,
                 self.keypoint_model,
-                timestamp = timestamp)
+                timestamp = timestamp,
+                track_id = self.next_track_id)
+            self.next_track_id += 1
             self.active_tracks.append(new_track)
 
 
