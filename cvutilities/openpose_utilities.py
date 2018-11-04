@@ -430,7 +430,7 @@ class Pose3D:
             if timestamp.size != 1:
                 raise ValueError('Timestamp does not appear to be a scalar')
         if keypoint_std_devs is not None:
-            keypoint_std_devs = np.array(keypoint_std_devs)
+            keypoint_std_devs = np.asarray(keypoint_std_devs)
             if keypoint_std_devs.size != num_body_parts*3:
                 raise ValueError('Keypoint standard deviations array does not appear to be of size {}*3'.format(num_body_parts))
             keypoint_std_devs = keypoint_std_devs.reshape((num_body_parts, 3))
@@ -1079,11 +1079,11 @@ class Pose3DDistribution:
 
     # Return keypoint means
     def keypoint_means(self):
-        return np.asarray([keypoint_distribution.mean for keypoint_distribution in self.keypoint_distributions])
+        return np.array([keypoint_distribution.mean for keypoint_distribution in self.keypoint_distributions])
 
     # Return keypoint covariances()
     def keypoint_covariances(self):
-        return np.asarray([keypoint_distribution.covariance for keypoint_distribution in self.keypoint_distributions])
+        return np.array([keypoint_distribution.covariance for keypoint_distribution in self.keypoint_distributions])
 
     # Return keypoint position means
     def keypoint_position_means(self):
@@ -1095,7 +1095,7 @@ class Pose3DDistribution:
 
     # Return keypoint standard deviations
     def keypoint_std_devs(self):
-        return np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance) for keypoint_distribution in self.keypoint_distributions]))
+        return np.sqrt(np.array([np.diag(keypoint_distribution.covariance) for keypoint_distribution in self.keypoint_distributions]))
 
     # Return keypoint position standard deviations
     def keypoint_position_std_devs(self):
@@ -1267,15 +1267,15 @@ class Pose3DTrack:
 
     # Return timestamps
     def timestamps(self):
-        return np.asarray([pose_3d_distribution.timestamp for pose_3d_distribution in self.pose_3d_distributions])
+        return np.array([pose_3d_distribution.timestamp for pose_3d_distribution in self.pose_3d_distributions])
 
     # Return keypoint means
     def keypoint_means(self):
-        return np.asarray([[keypoint_distribution.mean for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in self.pose_3d_distributions])
+        return np.array([[keypoint_distribution.mean for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in self.pose_3d_distributions])
 
     # Return keypoint covariances()
     def keypoint_covariances(self):
-        return np.asarray([[keypoint_distribution.covariance for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in self.pose_3d_distributions])
+        return np.array([[keypoint_distribution.covariance for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in self.pose_3d_distributions])
 
     # Return keypoint position means
     def keypoint_position_means(self):
@@ -1287,7 +1287,7 @@ class Pose3DTrack:
 
     # Return keypoint standard deviations
     def keypoint_std_devs(self):
-        return np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance) for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in self.pose_3d_distributions])
+        return np.array([np.sqrt(np.array([np.diag(keypoint_distribution.covariance) for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in self.pose_3d_distributions])
 
     # Return keypoint position standard deviations
     def keypoint_position_std_devs(self):
@@ -1462,7 +1462,7 @@ class Pose3DTracks:
 
     # Return timestamps for active tracks
     def active_timestamps(self):
-        return [np.asarray([pose_3d_distribution.timestamp for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
+        return [np.array([pose_3d_distribution.timestamp for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
     # Return number of missed observations for active tracks
     def active_num_missed_observations(self):
@@ -1470,31 +1470,31 @@ class Pose3DTracks:
 
     # Return keypoint means for active tracks
     def active_keypoint_means(self):
-        return [np.asarray([[keypoint_distribution.mean for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
+        return [np.array([[keypoint_distribution.mean for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
     # Return keypoint covariances for active tracks
     def active_keypoint_covariances(self):
-        return [np.asarray([[keypoint_distribution.covariance for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
+        return [np.array([[keypoint_distribution.covariance for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
     # Return keypoint position means for active tracks
     def active_keypoint_position_means(self):
-        return [np.asarray([[keypoint_distribution.mean[:3] for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
+        return [np.array([[keypoint_distribution.mean[:3] for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
     # Return keypoint velocity means for active tracks
     def active_keypoint_velocity_means(self):
-        return [np.asarray([[keypoint_distribution.mean[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
+        return [np.array([[keypoint_distribution.mean[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
     # Return keypoint standard deviations for active tracks
     def active_keypoint_std_devs(self):
-        return [np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance) for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
+        return [np.array([np.sqrt(np.array([np.diag(keypoint_distribution.covariance) for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
     # Return keypoint position standard deviations for active tracks
     def active_keypoint_position_std_devs(self):
-        return [np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance)[:3] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
+        return [np.array([np.sqrt(np.array([np.diag(keypoint_distribution.covariance)[:3] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
     # Return keypoint velocity standard deviations for active tracks
     def active_keypoint_velocity_std_devs(self):
-        return [np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
+        return [np.array([np.sqrt(np.array([np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
     # Construct and return a list of lists of 3D poses with the mean position
     # keypoints of the distributions in the active tracks
@@ -1504,7 +1504,7 @@ class Pose3DTracks:
 
     # Return timestamps for inactive tracks
     def inactive_timestamps(self):
-        return [np.asarray([pose_3d_distribution.timestamp for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
+        return [np.array([pose_3d_distribution.timestamp for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
 
     # Return number of missed observations for inactive tracks
     def inactive_num_missed_observations(self):
@@ -1512,31 +1512,31 @@ class Pose3DTracks:
 
     # Return keypoint means for inactive tracks
     def inactive_keypoint_means(self):
-        return [np.asarray([[keypoint_distribution.mean for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
+        return [np.array([[keypoint_distribution.mean for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
 
     # Return keypoint covariances for inactive tracks
     def inactive_keypoint_covariances(self):
-        return [np.asarray([[keypoint_distribution.covariance for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
+        return [np.array([[keypoint_distribution.covariance for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
 
     # Return keypoint position means for inactive tracks
     def inactive_keypoint_position_means(self):
-        return [np.asarray([[keypoint_distribution.mean[:3] for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
+        return [np.array([[keypoint_distribution.mean[:3] for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
 
     # Return keypoint velocity means for inactive tracks
     def inactive_keypoint_velocity_means(self):
-        return [np.asarray([[keypoint_distribution.mean[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
+        return [np.array([[keypoint_distribution.mean[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
 
     # Return keypoint standard deviations for inactive tracks
     def inactive_keypoint_std_devs(self):
-        return [np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance) for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
+        return [np.array([np.sqrt(np.array([np.diag(keypoint_distribution.covariance) for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
 
     # Return keypoint position standard deviations for inactive tracks
     def inactive_keypoint_position_std_devs(self):
-        return [np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance)[:3] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
+        return [np.array([np.sqrt(np.array([np.diag(keypoint_distribution.covariance)[:3] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
 
     # Return keypoint velocity standard deviations for inactive tracks
     def inactive_keypoint_velocity_std_devs(self):
-        return [np.asarray([np.sqrt(np.asarray([np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
+        return [np.array([np.sqrt(np.array([np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
 
     # Construct and return a list of lists of 3D poses with the mean position
     # keypoints of the distributions in the inactive tracks
@@ -1546,38 +1546,38 @@ class Pose3DTracks:
 
     # Return timestamps for last distributions in each active track
     def last_timestamps(self):
-        return np.asarray([active_track.last().timestamp for active_track in self.active_tracks])
+        return np.array([active_track.last().timestamp for active_track in self.active_tracks])
 
     # Return keypoint means for last distributions in each active track
     def last_keypoint_means(self):
-        return np.asarray([[keypoint_distribution.mean for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks])
+        return np.array([[keypoint_distribution.mean for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks])
 
     # Return keypoint covariances for last distributions in each active track
     def last_keypoint_covariances(self):
-        return np.asarray([[keypoint_distribution.covariance for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks])
+        return np.array([[keypoint_distribution.covariance for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks])
 
     # Return keypoint position means for last distributions in each active track
     def last_keypoint_position_means(self):
-        return np.asarray([[keypoint_distribution.mean[:3] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks])
+        return np.array([[keypoint_distribution.mean[:3] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks])
 
     # Return keypoint velocity means for last distributions in each active track
     def last_keypoint_velocity_means(self):
-        return np.asarray([[keypoint_distribution.mean[3:] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks])
+        return np.array([[keypoint_distribution.mean[3:] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks])
 
     # Return keypoint standard deviations for last distributions in each active
     # track
     def last_keypoint_std_devs(self):
-        return np.sqrt(np.asarray([[np.diag(keypoint_distribution.covariance) for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
+        return np.sqrt(np.array([[np.diag(keypoint_distribution.covariance) for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
 
     # Return keypoint position standard deviations for last distributions in
     # each active track
     def last_keypoint_position_std_devs(self):
-        return np.sqrt(np.asarray([[np.diag(keypoint_distribution.covariance)[:3] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
+        return np.sqrt(np.array([[np.diag(keypoint_distribution.covariance)[:3] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
 
     # Return keypoint velocity standard deviations for last distributions in
     # each active track
     def last_keypoint_velocity_std_devs(self):
-        return np.sqrt(np.asarray([[np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
+        return np.sqrt(np.array([[np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
 
     # Construct and return a list of 3D poses with the mean position keypoints
     # of the last distributions in the active tracks
@@ -1644,8 +1644,8 @@ class Pose3DTracks:
         pose_3d_observations,
         selected_track_indices,
         selected_observation_indices):
-        selected_track_indices = np.array(selected_track_indices)
-        selected_observation_indices = np.array(selected_observation_indices)
+        selected_track_indices = np.asarray(selected_track_indices)
+        selected_observation_indices = np.asarray(selected_observation_indices)
         if selected_track_indices.ndim != 1:
             raise ValueError('Track indices must be a one-dimensional array-like object')
         if selected_observation_indices.ndim != 1:
@@ -1673,11 +1673,11 @@ class Pose3DTracks:
         pose_3d_observations,
         selected_track_indices,
         selected_observation_indices):
-        selected_track_indices = np.array(selected_track_indices)
-        selected_observation_indices = np.array(selected_observation_indices)
+        selected_track_indices = np.asarray(selected_track_indices)
+        selected_observation_indices = np.asarray(selected_observation_indices)
         if len(pose_3d_observations.pose_3d_list_list) != 1:
             raise ValueError('Observations must be a one-dimensional object')
-        observation_timestamps = np.asarray([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations.pose_3d_list_list[0]])
+        observation_timestamps = np.array([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations.pose_3d_list_list[0]])
         if np.any(observation_timestamps != observation_timestamps[0]):
             raise ValueError('All observations must have timestamps and all timestamps must be equal')
         observation_timestamp = observation_timestamps[0]
