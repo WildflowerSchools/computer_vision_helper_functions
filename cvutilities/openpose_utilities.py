@@ -1238,8 +1238,10 @@ class Pose3DDistribution:
 class Pose3DTrack:
     def __init__(
         self,
+        keypoint_model,
         pose_3d_distributions,
         num_missed_observations = 0):
+        self.keypoint_model = keypoint_model
         self.pose_3d_distributions = pose_3d_distributions
         self.num_missed_observations = num_missed_observations
 
@@ -1248,19 +1250,19 @@ class Pose3DTrack:
     def initialize(
         cls,
         pose_initialization_model,
+        keypoint_model,
         tag = None,
         timestamp = None,
-        keypoint_model = None,
         pose_3d_observation = None):
         pose_3d_distributions = [Pose3DDistribution.initialize(
             pose_initialization_model,
             tag,
             timestamp)]
-        initial_track = cls(pose_3d_distributions)
+        initial_track = cls(
+            keypoint_model,
+            pose_3d_distributions)
         if pose_3d_observation is not None:
-            initial_track.incorporate_observation(
-                keypoint_model,
-                pose_3d_observation)
+            initial_track.incorporate_observation(pose_3d_observation)
         return initial_track
 
     # Return timestamps
@@ -1326,12 +1328,11 @@ class Pose3DTrack:
     # handle time intervals with units.
     def predict(
         self,
-        keypoint_model,
         delta_t = None,
         next_timestamp = None):
         current_pose_3d_distribution = self.last()
         next_pose_3d_distribution = current_pose_3d_distribution.predict(
-            keypoint_model,
+            self.keypoint_model,
             delta_t,
             next_timestamp)
         self.append(next_pose_3d_distribution)
@@ -1344,11 +1345,10 @@ class Pose3DTrack:
     # of the KeypointModel class
     def incorporate_observation(
         self,
-        keypoint_model,
         pose_3d_observation):
         prior_pose_3d_distribution = self.last()
         posterior_pose_3d_distribution = prior_pose_3d_distribution.incorporate_observation(
-            keypoint_model,
+            self.keypoint_model,
             pose_3d_observation)
         self.pose_3d_distributions[-1] = posterior_pose_3d_distribution
 
@@ -1360,17 +1360,12 @@ class Pose3DTrack:
     # track
     def predict_and_incorporate_observation(
         self,
-        keypoint_model,
         pose_3d_observation):
         if pose_3d_observation.timestamp is None:
             raise ValueError('Observation must have timestamp in order to drive prediction step')
         observation_timestamp = pose_3d_observation.timestamp
-        self.predict(
-            keypoint_model,
-            next_timestamp = observation_timestamp)
-        self.incorporate_observation(
-            keypoint_model,
-            pose_3d_observation)
+        self.predict(next_timestamp = observation_timestamp)
+        self.incorporate_observation(pose_3d_observation)
 
     # Given a keypoint model and an observation of a 3D pose (specified as a
     # Pose3D object), calculate the Mahalanobis distance between the anchor
@@ -1378,10 +1373,9 @@ class Pose3DTrack:
     # the observation. Keypoint model is an instance of the KeypointModel class
     def observation_mahalanobis_distance(
         self,
-        keypoint_model,
         pose_3d_observation):
         observation_mahalanobis_distance = self.last().observation_mahalanobis_distance(
-            keypoint_model,
+            self.keypoint_model,
             pose_3d_observation)
         return observation_mahalanobis_distance
 
@@ -1401,28 +1395,33 @@ class PoseTrackingModel:
 class Pose3DTracks:
     def __init__(
         self,
+        pose_initialization_model,
+        keypoint_model,
+        pose_tracking_model,
         active_tracks = None,
-        inactive_tracks = None,
-        pose_initialization_model = None):
+        inactive_tracks = None):
         if active_tracks is not None:
             check_last_timestamps(active_tracks)
         if active_tracks is None:
             active_tracks = []
         if inactive_tracks is None:
             inactive_tracks = []
+        self.pose_initialization_model = pose_initialization_model
+        self.keypoint_model = keypoint_model
+        self.pose_tracking_model = pose_tracking_model
         self.active_tracks = active_tracks
         self.inactive_tracks = inactive_tracks
-        self.pose_initialization_model = pose_initialization_model
 
     # Initialize the tracks
     @classmethod
     def initialize(
         cls,
         pose_initialization_model,
+        keypoint_model,
+        pose_tracking_model,
         tag = None,
         timestamp = None,
         num_tracks = None,
-        keypoint_model = None,
         pose_3d_observations = None):
         if num_tracks is None and pose_3d_observations is None:
             raise ValueError('Must specify either the number of tracks or a set of initial observations')
@@ -1436,16 +1435,18 @@ class Pose3DTracks:
         for track_index in range(num_tracks):
             track = Pose3DTrack.initialize(
                 pose_initialization_model,
+                keypoint_model,
                 tag = None,
                 timestamp = None)
             active_tracks.append(track)
         initial_tracks = cls(
+            pose_initialization_model = pose_initialization_model,
+            keypoint_model = keypoint_model,
+            pose_tracking_model = pose_tracking_model,
             active_tracks = active_tracks,
-            inactive_tracks = None,
-            pose_initialization_model = pose_initialization_model)
+            inactive_tracks = None)
         if pose_3d_observations is not None:
             initial_tracks.incorporate_observations(
-                keypoint_model,
                 pose_3d_observations,
                 selected_track_indices = range(num_tracks),
                 selected_observation_indices = range(num_tracks))
@@ -1615,6 +1616,7 @@ class Pose3DTracks:
         for new_track_index in range(num_new_tracks):
             new_track = Pose3DTrack.initialize(
                 self.pose_initialization_model,
+                self.keypoint_model,
                 timestamp = timestamp)
             self.active_tracks.append(new_track)
 
@@ -1626,12 +1628,10 @@ class Pose3DTracks:
     # make underlying functions be able to handle time intervals with units.
     def predict(
         self,
-        keypoint_model,
         delta_t = None,
         next_timestamp = None):
         for active_track in self.active_tracks:
             active_track.predict(
-                keypoint_model,
                 delta_t,
                 next_timestamp)
 
@@ -1641,7 +1641,6 @@ class Pose3DTracks:
     # unchanged. Keypoint model is an instance of the KeypointModel class
     def incorporate_observations(
         self,
-        keypoint_model,
         pose_3d_observations,
         selected_track_indices,
         selected_observation_indices):
@@ -1662,7 +1661,6 @@ class Pose3DTracks:
             track_index = selected_track_indices[index]
             observation_index = selected_observation_indices[index]
             self.active_tracks[track_index].incorporate_observation(
-                keypoint_model,
                 pose_3d_observations_list[observation_index])
 
     # Given a keypoint model and an observation of the 3D pose (specified as a
@@ -1672,7 +1670,6 @@ class Pose3DTracks:
     # tracks unchanged
     def predict_and_incorporate_observations(
         self,
-        keypoint_model,
         pose_3d_observations,
         selected_track_indices,
         selected_observation_indices):
@@ -1685,10 +1682,8 @@ class Pose3DTracks:
             raise ValueError('All observations must have timestamps and all timestamps must be equal')
         observation_timestamp = observation_timestamps[0]
         self.predict(
-            keypoint_model,
             next_timestamp = observation_timestamp)
         self.incorporate_observations(
-            keypoint_model,
             pose_3d_observations,
             selected_track_indices,
             selected_observation_indices)
@@ -1699,8 +1694,6 @@ class Pose3DTracks:
     # observations and tracks, and update the tracks accordingly
     def update(
         self,
-        keypoint_model,
-        pose_tracking_model,
         pose_3d_observations):
         if len(pose_3d_observations.pose_3d_list_list) != 1:
             raise ValueError('Observations must be a one-dimensional object')
@@ -1709,35 +1702,29 @@ class Pose3DTracks:
         if np.any(timestamps != timestamps[0]):
             raise ValueError('Timestamps on observations are missing or not equal to each other')
         timestamp = timestamps[0]
-        self.predict(
-            keypoint_model,
-            next_timestamp = timestamp)
-        cost_matrix = self.cost_matrix(
-            keypoint_model,
-            pose_3d_observations)
+        self.predict(next_timestamp = timestamp)
+        cost_matrix = self.cost_matrix(pose_3d_observations)
         matched_track_indices, matched_observation_indices = scipy.optimize.linear_sum_assignment(cost_matrix)
         matched_track_indices = matched_track_indices.tolist()
         matched_observation_indices = matched_observation_indices.tolist()
         num_matched_indices = len(matched_track_indices)
         for index in sorted(range(num_matched_indices), reverse = True):
-            if cost_matrix[matched_track_indices[index], matched_observation_indices[index]] > pose_tracking_model.cost_threshold:
+            if cost_matrix[matched_track_indices[index], matched_observation_indices[index]] > self.pose_tracking_model.cost_threshold:
                 del matched_track_indices[index]
                 del matched_observation_indices[index]
         unmatched_track_indices = list(set(range(self.num_active_tracks())) - set(matched_track_indices))
         unmatched_observation_indices = list(set(range(len(pose_3d_observations_list))) - set(matched_observation_indices))
         self.incorporate_observations(
-            keypoint_model,
             pose_3d_observations,
             matched_track_indices,
             matched_observation_indices)
         for unmatched_track_index in unmatched_track_indices:
             self.active_tracks[unmatched_track_index].num_missed_observations += 1
-            if self.active_tracks[unmatched_track_index].num_missed_observations >= pose_tracking_model.num_missed_observations_threshold:
+            if self.active_tracks[unmatched_track_index].num_missed_observations >= self.pose_tracking_model.num_missed_observations_threshold:
                 self.deactivate_track(unmatched_track_index)
         for unmatched_observation_index in unmatched_observation_indices:
             self.add_new_tracks(num_new_tracks = 1)
             self.active_tracks[-1].incorporate_observation(
-                keypoint_model,
                 pose_3d_observations_list[unmatched_observation_index])
 
     # Given a keypoint model and a set of 3D pose observations (specified as a
@@ -1745,7 +1732,6 @@ class Pose3DTracks:
     # pose distributions in the active tracks and the observations
     def cost_matrix(
         self,
-        keypoint_model,
         pose_3d_observations):
         if len(pose_3d_observations.pose_3d_list_list) != 1:
             raise ValueError('Observations must be a one-dimensional object')
@@ -1757,9 +1743,7 @@ class Pose3DTracks:
             active_track = self.active_tracks[active_track_index]
             for observation_index in range(num_observations):
                 observation = pose_3d_observations_list[observation_index]
-                cost_matrix[active_track_index, observation_index] = active_track.observation_mahalanobis_distance(
-                    keypoint_model,
-                    observation)
+                cost_matrix[active_track_index, observation_index] = active_track.observation_mahalanobis_distance(observation)
         return cost_matrix
 
 # Check that all of the last timestamps in a list of 3D pose tracks are not equal
