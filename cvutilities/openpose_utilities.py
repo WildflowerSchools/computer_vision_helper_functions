@@ -684,7 +684,7 @@ class Poses3D:
         else:
             return tags_list
 
-    # Return a dataframe with multiple strands of dataframe
+    # Return a dataframe with the data from the poses
     def dataframe(self):
         dataframe = pd.DataFrame({
             'timestamp': self.timestamps(),
@@ -1318,6 +1318,11 @@ class Pose3DTrack:
         poses_3d = Poses3D([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in self.pose_3d_distributions]])
         return poses_3d
 
+    # Construct and return a dataframe with the 3D pose data from the pose track
+    def dataframe(self):
+        dataframe = self.to_poses_3d().dataframe()
+        return dataframe
+
     # Construct and return the 3D pose with the mean position keypoints
     # of the last distribution in the track
     def last_to_pose_3d(self):
@@ -1513,6 +1518,21 @@ class Pose3DTracks:
         poses_3d = Poses3D([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in active_track.pose_3d_distributions] for active_track in self.active_tracks])
         return poses_3d
 
+    # Construct and return a dataframe with the data from the active
+    # tracks
+    def active_dataframe(self):
+        num_active_tracks = len(self.active_tracks)
+        num_inactive_tracks = len(self.inactive_tracks)
+        dataframe_list = []
+        for track_index in range(num_active_tracks):
+            track_id = track_index + num_inactive_tracks
+            dataframe = self.active_tracks[track_index].dataframe()
+            dataframe.insert(0, 'track_id', track_id)
+            dataframe_list.append(dataframe)
+        combined_dataframe = pd.concat(dataframe_list, ignore_index = True)
+        combined_dataframe.insert(1, 'track_status', 'active')
+        return combined_dataframe
+
     # Return timestamps for inactive tracks
     def inactive_timestamps(self):
         return [np.array([pose_3d_distribution.timestamp for pose_3d_distribution in inactive_track.pose_3d_distributions]) for inactive_track in self.inactive_tracks]
@@ -1554,6 +1574,31 @@ class Pose3DTracks:
     def inactive_to_poses_3d(self):
         poses_3d = Poses3D([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in inactive_track.pose_3d_distributions] for inactive_track in self.inactive_tracks])
         return poses_3d
+
+    # Construct and return a dataframe with the data from the inactive
+    # tracks
+    def inactive_dataframe(self):
+        num_active_tracks = len(self.active_tracks)
+        num_inactive_tracks = len(self.inactive_tracks)
+        dataframe_list = []
+        for track_index in range(num_inactive_tracks):
+            track_id = track_index
+            dataframe = self.inactive_tracks[track_index].dataframe()
+            dataframe.insert(0, 'track_id', track_id)
+            dataframe_list.append(dataframe)
+        combined_dataframe = pd.concat(dataframe_list, ignore_index = True)
+        combined_dataframe.insert(1, 'track_status', 'inactive')
+        return combined_dataframe
+
+    # Construct and return a list of dataframes with the data from all tracks
+    # (active and inactive)
+    def dataframe(self):
+        active_dataframe = self.active_dataframe()
+        inactive_dataframe = self.inactive_dataframe()
+        combined_dataframe = pd.concat(
+            (inactive_dataframe, active_dataframe),
+            ignore_index = True)
+        return combined_dataframe
 
     # Return timestamps for last distributions in each active track
     def last_timestamps(self):
