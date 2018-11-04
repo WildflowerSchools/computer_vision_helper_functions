@@ -1720,8 +1720,10 @@ class Pose3DTracks:
             matched_observation_indices)
         for unmatched_track_index in unmatched_track_indices:
             self.active_tracks[unmatched_track_index].num_missed_observations += 1
-            if self.active_tracks[unmatched_track_index].num_missed_observations >= self.pose_tracking_model.num_missed_observations_threshold:
-                self.deactivate_track(unmatched_track_index)
+        reverse_sorted_active_track_indices = sorted(range(len(self.active_tracks)), reverse = True)
+        for active_track_index in reverse_sorted_active_track_indices:
+            if self.active_tracks[active_track_index].num_missed_observations >= self.pose_tracking_model.num_missed_observations_threshold:
+                self.deactivate_track(active_track_index)
         for unmatched_observation_index in unmatched_observation_indices:
             self.add_new_tracks(num_new_tracks = 1)
             self.active_tracks[-1].incorporate_observation(
