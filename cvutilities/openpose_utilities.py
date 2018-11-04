@@ -1403,6 +1403,15 @@ class Pose3DTrack:
             pose_3d_observation)
         return observation_mahalanobis_distance
 
+# Class to define the parameters of the pose tracking model
+class PoseTrackingModel:
+    def __init__(
+        self,
+        cost_threshold = 1.0,
+        num_missed_observations_threshold = 10):
+        self.cost_threshold = cost_threshold
+        self.num_missed_observations_threshold = num_missed_observations_threshold
+
 # Class to hold data for a collection of 3D pose tracks. We allow this object to
 # contain both active tracks and inactive tracks. The active tracks are assumed
 # to be synchronized in the sense that all of the last distributions in the
@@ -1712,9 +1721,8 @@ class Pose3DTracks:
     def update(
         self,
         keypoint_model,
-        pose_3d_observations,
-        cost_threshold = 1.0,
-        num_missed_observations_threshold = 3):
+        pose_tracking_model,
+        pose_3d_observations):
         if len(pose_3d_observations.pose_3d_list_list) != 1:
             raise ValueError('Observations must be a one-dimensional object')
         pose_3d_observations_list = pose_3d_observations.pose_3d_list_list[0]
@@ -1733,7 +1741,7 @@ class Pose3DTracks:
         matched_observation_indices = matched_observation_indices.tolist()
         num_matched_indices = len(matched_track_indices)
         for index in sorted(range(num_matched_indices), reverse = True):
-            if cost_matrix[matched_track_indices[index], matched_observation_indices[index]] > cost_threshold:
+            if cost_matrix[matched_track_indices[index], matched_observation_indices[index]] > pose_tracking_model.cost_threshold:
                 del matched_track_indices[index]
                 del matched_observation_indices[index]
         unmatched_track_indices = list(set(range(self.num_active_tracks())) - set(matched_track_indices))
@@ -1745,7 +1753,7 @@ class Pose3DTracks:
             matched_observation_indices)
         for unmatched_track_index in unmatched_track_indices:
             self.active_tracks[unmatched_track_index].num_missed_observations += 1
-            if self.active_tracks[unmatched_track_index].num_missed_observations >= num_missed_observations_threshold:
+            if self.active_tracks[unmatched_track_index].num_missed_observations >= pose_tracking_model.num_missed_observations_threshold:
                 self.deactivate_track(unmatched_track_index)
         for unmatched_observation_index in unmatched_observation_indices:
             self.add_new_tracks(num_new_tracks = 1)
