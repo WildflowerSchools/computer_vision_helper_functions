@@ -1051,7 +1051,9 @@ class Pose3DDistribution:
         cls,
         pose_initialization_model,
         tag = None,
-        timestamp = None):
+        timestamp = None,
+        keypoint_model = None,
+        pose_3d_observation = None):
         keypoint_covariance = np.diagflat(
             np.concatenate((
                 np.repeat(pose_initialization_model.initial_keypoint_position_error**2,3),
@@ -1065,26 +1067,15 @@ class Pose3DDistribution:
                 keypoint_mean,
                 keypoint_covariance)
             keypoint_distributions.append(keypoint_distribution)
-        return cls(
+        initial_distribution = cls(
             keypoint_distributions,
             tag,
             timestamp)
-
-    # Initialize the distributions and incorporate an observation
-    @classmethod
-    def initialize_and_incorporate_observation(
-        cls,
-        pose_initialization_model,
-        keypoint_model,
-        pose_3d_observation):
-        observation_tag = pose_3d_observation.tag
-        initial_distribution =  cls.initialize(
-            pose_initialization_model,
-            tag = observation_tag)
-        posterior_distribution = initial_distribution.incorporate_observation(
-            keypoint_model,
-            pose_3d_observation)
-        return posterior_distribution
+        if pose_3d_observation is not None:
+            initial_distribution = initial_distribution.incorporate_observation(
+                keypoint_model,
+                pose_3d_observation)
+        return initial_distribution
 
     # Return keypoint means
     def keypoint_means(self):
@@ -1258,27 +1249,18 @@ class Pose3DTrack:
         cls,
         pose_initialization_model,
         tag = None,
-        timestamp = None):
+        timestamp = None,
+        keypoint_model = None,
+        pose_3d_observation = None):
         pose_3d_distributions = [Pose3DDistribution.initialize(
             pose_initialization_model,
             tag,
             timestamp)]
-        return cls(pose_3d_distributions)
-
-    # Initialize the track and incorporate an initial observation
-    @classmethod
-    def initialize_and_incorporate_observation(
-        cls,
-        pose_initialization_model,
-        keypoint_model,
-        pose_3d_observation):
-        observation_tag = pose_3d_observation.tag
-        initial_track = cls.initialize(
-            pose_initialization_model,
-            tag = observation_tag)
-        initial_track.incorporate_observation(
-            keypoint_model,
-            pose_3d_observation)
+        initial_track = cls(pose_3d_distributions)
+        if pose_3d_observation is not None:
+            initial_track.incorporate_observation(
+                keypoint_model,
+                pose_3d_observation)
         return initial_track
 
     # Return timestamps
@@ -1439,7 +1421,17 @@ class Pose3DTracks:
         pose_initialization_model,
         tag = None,
         timestamp = None,
-        num_tracks = 1):
+        num_tracks = None,
+        keypoint_model = None,
+        pose_3d_observations = None):
+        if num_tracks is None and pose_3d_observations is None:
+            raise ValueError('Must specify either the number of tracks or a set of initial observations')
+        if num_tracks is not None and pose_3d_observations is not None:
+            raise ValueError('Must specify either the number of tracks or a set of initial observations but not both')
+        if pose_3d_observations is not None:
+            if len(pose_3d_observations.pose_3d_list_list) != 1:
+                raise ValueError('Observations must be a one-dimensional object')
+            num_tracks = len(pose_3d_observations.pose_3d_list_list[0])
         active_tracks=[]
         for track_index in range(num_tracks):
             track = Pose3DTrack.initialize(
@@ -1447,29 +1439,16 @@ class Pose3DTracks:
                 tag = None,
                 timestamp = None)
             active_tracks.append(track)
-        return cls(
+        initial_tracks = cls(
             active_tracks = active_tracks,
             inactive_tracks = None,
             pose_initialization_model = pose_initialization_model)
-
-    # Initialize the tracks and incorporate an initial set of observations
-    @classmethod
-    def initialize_and_incorporate_observations(
-        cls,
-        pose_initialization_model,
-        keypoint_model,
-        pose_3d_observations):
-        if len(pose_3d_observations.pose_3d_list_list) != 1:
-            raise ValueError('Observations must be a one-dimensional object')
-        num_observations = len(pose_3d_observations.pose_3d_list_list[0])
-        initial_tracks = cls.initialize(
-            pose_initialization_model,
-            num_tracks = num_observations)
-        initial_tracks.incorporate_observations(
-            keypoint_model,
-            pose_3d_observations,
-            selected_track_indices = range(num_observations),
-            selected_observation_indices = range(num_observations))
+        if pose_3d_observations is not None:
+            initial_tracks.incorporate_observations(
+                keypoint_model,
+                pose_3d_observations,
+                selected_track_indices = range(num_tracks),
+                selected_observation_indices = range(num_tracks))
         return initial_tracks
 
     # Return number of active tracks
