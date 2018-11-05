@@ -449,7 +449,11 @@ class Pose3D:
         keypoints,
         tag = None,
         timestamp = None):
-        valid_keypoints = np.logical_not(np.isnan(keypoints[:, 0]))
+        keypoints = np.asarray(keypoints)
+        if keypoints.size > 0:
+            valid_keypoints = np.logical_not(np.isnan(keypoints[:, 0]))
+        else:
+            valid_keypoints = np.array([])
         return cls(
             keypoints,
             valid_keypoints,
@@ -619,8 +623,12 @@ class Poses3D:
         keypoints,
         timestamp = None):
         keypoints = np.asarray(keypoints)
+        if keypoints.size == 0:
+            return cls([[]])
         if keypoints.ndim > 3 or keypoints.ndim < 2:
-            raise ValueError('Keypoints array needs to be 3-dimensional or 2-dimensional')
+            print(keypoints.ndim)
+            print(keypoints)
+            raise ValueError('Keypoints array needs to be 3-dimensional, 2-dimensional or empty')
         if keypoints.ndim == 2:
             keypoints = np.expand_dims(keypoints, 0)
         num_poses = keypoints.shape[0]
@@ -633,13 +641,17 @@ class Poses3D:
         pose_3d_list_list = [pose_3d_list]
         return cls(pose_3d_list_list)
 
-    # Return the number of 3D poses in the lists
+    # Return the number of 3D poses in each list
     def num_3d_poses(self):
         num_3d_poses_list = [len(pose_3d_list) for pose_3d_list in self.pose_3d_list_list]
         if len(num_3d_poses_list) == 1:
             return num_3d_poses_list[0]
         else:
             return num_3d_poses_list
+
+    # Return the number of 3D poses in the lists
+    def total_num_3d_poses(self):
+        return np.sum(np.array(self.num_3d_poses()))
 
     # Return the keypoints for all of the 3D poses in the lists
     def keypoints(self):
@@ -1711,24 +1723,25 @@ class Pose3DTracks:
         pose_3d_observations,
         selected_track_indices,
         selected_observation_indices):
-        selected_track_indices = np.asarray(selected_track_indices)
-        selected_observation_indices = np.asarray(selected_observation_indices)
-        if selected_track_indices.ndim != 1:
-            raise ValueError('Track indices must be a one-dimensional array-like object')
-        if selected_observation_indices.ndim != 1:
-            raise ValueError('Observation indices must be a one-dimensional array-like object')
-        num_selected_tracks = selected_track_indices.shape[0]
-        num_selected_observations = selected_observation_indices.shape[0]
-        if num_selected_tracks != num_selected_observations:
-            raise ValueError('Number of selected observations does not match number of selected tracks')
-        if len(pose_3d_observations.pose_3d_list_list) != 1:
-            raise ValueError('Observations must be a one-dimensional object')
-        pose_3d_observations_list = pose_3d_observations.pose_3d_list_list[0]
-        for index in range(num_selected_tracks):
-            track_index = selected_track_indices[index]
-            observation_index = selected_observation_indices[index]
-            self.active_tracks[track_index].incorporate_observation(
-                pose_3d_observations_list[observation_index])
+        if pose_3d_observations.total_num_3d_poses() > 0:
+            selected_track_indices = np.asarray(selected_track_indices)
+            selected_observation_indices = np.asarray(selected_observation_indices)
+            if selected_track_indices.ndim != 1:
+                raise ValueError('Track indices must be a one-dimensional array-like object')
+            if selected_observation_indices.ndim != 1:
+                raise ValueError('Observation indices must be a one-dimensional array-like object')
+            num_selected_tracks = selected_track_indices.shape[0]
+            num_selected_observations = selected_observation_indices.shape[0]
+            if num_selected_tracks != num_selected_observations:
+                raise ValueError('Number of selected observations does not match number of selected tracks')
+            if len(pose_3d_observations.pose_3d_list_list) != 1:
+                raise ValueError('Observations must be a one-dimensional object')
+            pose_3d_observations_list = pose_3d_observations.pose_3d_list_list[0]
+            for index in range(num_selected_tracks):
+                track_index = selected_track_indices[index]
+                observation_index = selected_observation_indices[index]
+                self.active_tracks[track_index].incorporate_observation(
+                    pose_3d_observations_list[observation_index])
 
     # Given a keypoint model and an observation of a 3D pose (specified as a
     # Pose3D object), apply the model to predict the tracks at the time of the
@@ -1740,20 +1753,21 @@ class Pose3DTracks:
         pose_3d_observations,
         selected_track_indices,
         selected_observation_indices):
-        selected_track_indices = np.asarray(selected_track_indices)
-        selected_observation_indices = np.asarray(selected_observation_indices)
-        if len(pose_3d_observations.pose_3d_list_list) != 1:
-            raise ValueError('Observations must be a one-dimensional object')
-        observation_timestamps = np.array([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations.pose_3d_list_list[0]])
-        if np.any(observation_timestamps != observation_timestamps[0]):
-            raise ValueError('All observations must have timestamps and all timestamps must be equal')
-        observation_timestamp = observation_timestamps[0]
-        self.predict(
-            next_timestamp = observation_timestamp)
-        self.incorporate_observations(
-            pose_3d_observations,
-            selected_track_indices,
-            selected_observation_indices)
+        if pose_3d_observations.total_num_3d_poses() > 0:
+            selected_track_indices = np.asarray(selected_track_indices)
+            selected_observation_indices = np.asarray(selected_observation_indices)
+            if len(pose_3d_observations.pose_3d_list_list) != 1:
+                raise ValueError('Observations must be a one-dimensional object')
+            observation_timestamps = np.array([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations.pose_3d_list_list[0]])
+            if np.any(observation_timestamps != observation_timestamps[0]):
+                raise ValueError('All observations must have timestamps and all timestamps must be equal')
+            observation_timestamp = observation_timestamps[0]
+            self.predict(
+                next_timestamp = observation_timestamp)
+            self.incorporate_observations(
+                pose_3d_observations,
+                selected_track_indices,
+                selected_observation_indices)
 
     # Given a set of observations, predict the 3D pose distributions of the
     # active tracks at the time of the observations, compare the observations to
@@ -1762,39 +1776,40 @@ class Pose3DTracks:
     def update(
         self,
         pose_3d_observations):
-        if len(pose_3d_observations.pose_3d_list_list) != 1:
-            raise ValueError('Observations must be a one-dimensional object')
-        pose_3d_observations_list = pose_3d_observations.pose_3d_list_list[0]
-        timestamps = np.array([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations_list])
-        if np.any(timestamps != timestamps[0]):
-            raise ValueError('Timestamps on observations are missing or not equal to each other')
-        timestamp = timestamps[0]
-        self.predict(next_timestamp = timestamp)
-        cost_matrix = self.cost_matrix(pose_3d_observations)
-        matched_track_indices, matched_observation_indices = scipy.optimize.linear_sum_assignment(cost_matrix)
-        matched_track_indices = matched_track_indices.tolist()
-        matched_observation_indices = matched_observation_indices.tolist()
-        num_matched_indices = len(matched_track_indices)
-        for index in sorted(range(num_matched_indices), reverse = True):
-            if cost_matrix[matched_track_indices[index], matched_observation_indices[index]] > self.pose_tracking_model.cost_threshold:
-                del matched_track_indices[index]
-                del matched_observation_indices[index]
-        unmatched_track_indices = list(set(range(self.num_active_tracks())) - set(matched_track_indices))
-        unmatched_observation_indices = list(set(range(len(pose_3d_observations_list))) - set(matched_observation_indices))
-        self.incorporate_observations(
-            pose_3d_observations,
-            matched_track_indices,
-            matched_observation_indices)
-        for unmatched_track_index in unmatched_track_indices:
-            self.active_tracks[unmatched_track_index].num_missed_observations += 1
-        reverse_sorted_active_track_indices = sorted(range(len(self.active_tracks)), reverse = True)
-        for active_track_index in reverse_sorted_active_track_indices:
-            if self.active_tracks[active_track_index].num_missed_observations >= self.pose_tracking_model.num_missed_observations_threshold:
-                self.deactivate_track(active_track_index)
-        for unmatched_observation_index in unmatched_observation_indices:
-            self.add_new_tracks(num_new_tracks = 1)
-            self.active_tracks[-1].incorporate_observation(
-                pose_3d_observations_list[unmatched_observation_index])
+        if pose_3d_observations.total_num_3d_poses() > 0:
+            if len(pose_3d_observations.pose_3d_list_list) != 1:
+                raise ValueError('Observations must be a one-dimensional object')
+            pose_3d_observations_list = pose_3d_observations.pose_3d_list_list[0]
+            timestamps = np.array([pose_3d_observation.timestamp for pose_3d_observation in pose_3d_observations_list])
+            if np.any(timestamps != timestamps[0]):
+                raise ValueError('Timestamps on observations are missing or not equal to each other')
+            timestamp = timestamps[0]
+            self.predict(next_timestamp = timestamp)
+            cost_matrix = self.cost_matrix(pose_3d_observations)
+            matched_track_indices, matched_observation_indices = scipy.optimize.linear_sum_assignment(cost_matrix)
+            matched_track_indices = matched_track_indices.tolist()
+            matched_observation_indices = matched_observation_indices.tolist()
+            num_matched_indices = len(matched_track_indices)
+            for index in sorted(range(num_matched_indices), reverse = True):
+                if cost_matrix[matched_track_indices[index], matched_observation_indices[index]] > self.pose_tracking_model.cost_threshold:
+                    del matched_track_indices[index]
+                    del matched_observation_indices[index]
+            unmatched_track_indices = list(set(range(self.num_active_tracks())) - set(matched_track_indices))
+            unmatched_observation_indices = list(set(range(len(pose_3d_observations_list))) - set(matched_observation_indices))
+            self.incorporate_observations(
+                pose_3d_observations,
+                matched_track_indices,
+                matched_observation_indices)
+            for unmatched_track_index in unmatched_track_indices:
+                self.active_tracks[unmatched_track_index].num_missed_observations += 1
+            reverse_sorted_active_track_indices = sorted(range(len(self.active_tracks)), reverse = True)
+            for active_track_index in reverse_sorted_active_track_indices:
+                if self.active_tracks[active_track_index].num_missed_observations >= self.pose_tracking_model.num_missed_observations_threshold:
+                    self.deactivate_track(active_track_index)
+            for unmatched_observation_index in unmatched_observation_indices:
+                self.add_new_tracks(num_new_tracks = 1)
+                self.active_tracks[-1].incorporate_observation(
+                    pose_3d_observations_list[unmatched_observation_index])
 
     # Given a keypoint model and a set of 3D pose observations (specified as a
     # list of Pose3D objects), calculate the cost matrix between the last 3D
