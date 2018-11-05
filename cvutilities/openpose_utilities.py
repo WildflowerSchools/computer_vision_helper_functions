@@ -97,7 +97,7 @@ head_and_torso_indices = [0, 1, 2, 5, 8, 11, 14 , 15, 16, 17]
 # Specify time unit when unitless time value is needed (e.g., in Kalman filter)
 time_unit = np.timedelta64(1, 's')
 
-# Class to hold the data for a single 2D pose
+# Class to represent a single 2D pose
 class Pose2D:
     def __init__(
         self,
@@ -125,7 +125,7 @@ class Pose2D:
         self.timestamp = timestamp
 
     # Pull the pose data from a dictionary with the same structure as the
-    # correponding OpenPose output JSON string
+    # correponding OpenPose output JSON string for a single person
     @classmethod
     def from_openpose_person_json_data(
         cls,
@@ -166,7 +166,7 @@ class Pose2D:
     # Draw the pose onto a chart with the coordinate system of the origin image.
     # We separate this from the plotting function below because we might want to
     # draw several poses or other elements before formatting and showing the
-    # chart.
+    # chart
     def draw(self):
         all_points = self.keypoints
         valid_keypoints = self.valid_keypoints
@@ -183,7 +183,7 @@ class Pose2D:
                     alpha = 0.2)
 
     # Plot a pose onto a chart with the coordinate system of the origin image.
-    # Calls the drawing function above, adds formating, and shows the plot.
+    # Calls the drawing function above, adds formating, and shows the plot
     def plot(
         self,
         pose_tag = None,
@@ -192,12 +192,11 @@ class Pose2D:
         cvutilities.camera_utilities.format_2d_image_plot(image_size)
         plt.show()
 
-# Class to represent a generic collection of 2D poses, either a set of poses (as
-# from a single camera) or a set of set of poses (as from multiple cameras at a
-# single moment in time). Internal structure is a list of lists of Pose2D
-# objects. When working with one-dimensional collections, input methods add the
-# additional dimension and output methods remove the addtional dimension as
-# necessary
+# Class to represent a collection of 2D poses, either a set of poses (as from a
+# single camera) or a set of set of poses (as from multiple cameras at a single
+# moment in time). Internal structure is a list of lists of Pose2D objects. When
+# working with one-dimensional collections, input methods add the additional
+# dimension and output methods remove the addtional dimension as necessary
 class Poses2D:
     def __init__(
         self,
@@ -207,7 +206,7 @@ class Poses2D:
         self.source_images = source_images
 
     # Pull the pose data for a single camera from a dictionary with the same
-    # structure as the correponding OpenPose output JSON file
+    # structure as the correponding OpenPose output JSON file for a single image
     @classmethod
     def from_openpose_output_json_data(
         cls,
@@ -221,7 +220,7 @@ class Poses2D:
             source_images)
 
     # Pull the pose data for a single camera from a string containing the
-    # contents of an OpenPose output JSON file
+    # contents of an OpenPose output JSON file for a single image
     @classmethod
     def from_openpose_output_json_string(
         cls,
@@ -267,8 +266,8 @@ class Poses2D:
             timestamp)
 
     # Pull the pose data for a single camera from an OpenPose output JSON file
-    # stored on S3 and specified by classroom name, camera name, and a Python
-    # datetime object
+    # stored on S3 and specified by Wildflower classroom name, camera name, and
+    # a Python datetime object
     @classmethod
     def from_openpose_output_wildflower_s3(
         cls,
@@ -295,8 +294,8 @@ class Poses2D:
             timestamp = datetime)
 
     # Pull the pose data for multiple cameras at a single moment in time from a
-    # set of OpenPose output JSON files stored on S3 and specified by classroom
-    # name, a list of camera names, and a Python datetime object
+    # set of OpenPose output JSON files stored on S3 and specified by Wildflower
+    # classroom name, a list of camera names, and a Python datetime object
     @classmethod
     def from_openpose_timestep_wildflower_s3(
         cls,
@@ -403,7 +402,7 @@ class Poses2D:
             cvutilities.camera_utilities.format_2d_image_plot(current_image_size)
             plt.show()
 
-# Class to hold the data for a single 3D pose
+# Class to represent a single 3D pose
 class Pose3D:
     def __init__(
         self,
@@ -443,7 +442,7 @@ class Pose3D:
         self.keypoint_std_devs = keypoint_std_devs
 
     # Build a 3D pose object from a simple array of keypoints. Assume that
-    # non-valid keypoints are indicated by Numpy NAN values
+    # non-valid keypoints are indicated by numpy NAN values
     @classmethod
     def from_keypoints(
         cls,
@@ -599,13 +598,13 @@ class Pose3D:
         cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
         plt.show()
 
-# Class to represent a generic collection of 3D poses, either a set of poses
-# over time (as from a pose track) or a set of poses at a single point in time
-# (as from a set of observations or the last poses in a set of pose tracks) or
-# set of sets of poses over time (as from a collection of pose tracks). Internal
-# structure is a list of lists of Pose3D objects. When working with
-# one-dimensional collections, input methods add the additional dimension and
-# output methods remove the addtional dimension as necessary
+# Class to represent a collection of 3D poses, either a set of poses over time
+# (as from a pose track) or a set of poses at a single point in time (as from a
+# set of observations or the last poses in a set of pose tracks) or set of sets
+# of poses over time (as from a collection of pose tracks). Internal structure
+# is a list of lists of Pose3D objects. When working with one-dimensional
+# collections, input methods add the additional dimension and output methods
+# remove the addtional dimension as necessary
 class Poses3D:
     def __init__(
         self,
@@ -613,7 +612,7 @@ class Poses3D:
         self.pose_3d_list_list = pose_3d_list_list
 
     # Build a 3D poses object from a simple array of keypoints. Assume that
-    # non-valid keypoints are indicated by Numpy NAN values
+    # non-valid keypoints are indicated by numpy NAN values
     @classmethod
     def from_keypoints(
         cls,
@@ -684,7 +683,7 @@ class Poses3D:
         else:
             return tags_list
 
-    # Return a dataframe with the data from the poses
+    # Return a dataframe with the data from the 3D poses
     def dataframe(self):
         dataframe = pd.DataFrame({
             'timestamp': self.timestamps(),
@@ -717,9 +716,9 @@ class Poses3D:
             cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
             plt.show()
 
-# Class to hold the data for a collection of 3D poses reconstructed from 2D
-# poses across multiple cameras at a single moment in time. This data has a
-# natural graph structure, with 2D poses as the nodes and 3D poses as the edges
+# Class to represent a collection of 3D poses reconstructed from 2D poses across
+# multiple cameras at a single moment in time. This data has a natural graph
+# structure, with 2D poses as the nodes and 3D poses as the edges
 class Pose3DGraph:
     def __init__(
         self,
@@ -798,7 +797,7 @@ class Pose3DGraph:
     def valid_keypoints(self):
         return np.array([edge[2]['pose'].valid_keypoints for edge in list(self.pose_graph.edges.data())])
 
-    # Return the projection errors for all of the 3D poses in the collection.
+    # Return the projection errors for all of the 3D poses in the collection
     def projection_errors(self):
         return np.array([edge[2]['pose'].projection_error for edge in list(self.pose_graph.edges.data())])
 
@@ -806,7 +805,7 @@ class Pose3DGraph:
     def tags(self):
         return [edge[2]['pose'].tag for edge in list(self.pose_graph.edges.data())]
 
-    # Return the tags for all of the 3D poses in the collection.
+    # Return the timestamps for all of the 3D poses in the collection.
     def timestamps(self):
         return np.array([edge[2]['pose'].timestamp for edge in list(self.pose_graph.edges.data())])
 
@@ -885,7 +884,7 @@ class Pose3DGraph:
     # Starting with a collection of 3D poses representing likely matches, for
     # each connected subgraph (which now represents a set of poses connected
     # across camera pairs that ought to be the same person), we extract the
-    # match with the lowest reprojection error (we could average instead).
+    # match with the lowest reprojection error (we could average instead)
     def extract_best_matches_from_likely_matches(
         self):
         # For now, we make a copy of each subgraph of the likely matches, select
@@ -1056,7 +1055,7 @@ class Pose3DDistribution:
         self.tag = tag
         self.timestamp = timestamp
 
-    # Initialize the distributions
+    # Initialize the 3D pose distribution
     @classmethod
     def initialize(
         cls,
@@ -1092,7 +1091,7 @@ class Pose3DDistribution:
     def keypoint_means(self):
         return np.array([keypoint_distribution.mean for keypoint_distribution in self.keypoint_distributions])
 
-    # Return keypoint covariances()
+    # Return keypoint covariances
     def keypoint_covariances(self):
         return np.array([keypoint_distribution.covariance for keypoint_distribution in self.keypoint_distributions])
 
@@ -1100,7 +1099,7 @@ class Pose3DDistribution:
     def keypoint_position_means(self):
         return self.keypoint_means()[:, :3]
 
-    # Return keypoint position means
+    # Return keypoint velocity means
     def keypoint_velocity_means(self):
         return self.keypoint_means()[:, 3:]
 
@@ -1112,7 +1111,7 @@ class Pose3DDistribution:
     def keypoint_position_std_devs(self):
         return self.keypoint_std_devs()[:, :3]
 
-    # Return keypoint position standard deviations
+    # Return keypoint velocity standard deviations
     def keypoint_velocity_std_devs(self):
         return self.keypoint_std_devs()[:, 3:]
 
@@ -1120,8 +1119,9 @@ class Pose3DDistribution:
     def tag():
         return self.tag
 
-    # Construct and return a 3D pose with the mean position keypoints and
-    # position standard deviations of the distribution
+    # Construct and return a 3D pose with the keypoints equal to the mean
+    # position keypoints of the distribution and position standard deviations
+    # equal to the position standard deviations of the distribution
     def to_pose_3d(self):
         pose_3d = Pose3D(
             keypoints = self.keypoint_position_means(),
@@ -1133,11 +1133,10 @@ class Pose3DDistribution:
         return pose_3d
 
     # Given a keypoint model and a time interval, apply the model to calculate
-    # the next 3D pose distribution. Keypoint model is an instance of the
-    # KeypointModel class. User can specify time interval explicitly or method
-    # will attempt to infer from ending timestamp. Time unit is specified above.
-    # In the future, we may want to make underlying functions be able to handle
-    # time intervals with units
+    # the next 3D pose distribution. User can specify time interval explicitly
+    # or method will attempt to infer from ending timestamp. Time unit is
+    # specified above. In the future, we may want to make underlying functions
+    # be able to handle time intervals with units
     def predict(
         self,
         keypoint_model,
@@ -1168,11 +1167,11 @@ class Pose3DDistribution:
             next_timestamp)
         return next_pose_3d_distribution
 
-    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Given a keypoint model and an observation of a 3D pose (specified as a
     # Pose3D object), apply the model to calculate the posterior 3D pose
     # distribution which incorporates the information from this observation. For
     # any keypoints we don't observe, the keypoint distribution remains
-    # unchanged. Keypoint model is an instance of the KeypointModel class
+    # unchanged
     def incorporate_observation(
         self,
         keypoint_model,
@@ -1207,10 +1206,11 @@ class Pose3DDistribution:
             posterior_timestamp)
         return posterior_pose_3d_distribution
 
-    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Given a keypoint model and an observation of a 3D pose (specified as a
     # Pose3D object), apply the model to predict the distribution at the time of
     # the observation and then calculate the posterior 3D pose distribution
-    # which incorporates the information from the observation
+    # which incorporates the information from the observation (combines the
+    # methods above)
     def predict_and_incorporate_observation(
         self,
         keypoint_model,
@@ -1226,10 +1226,9 @@ class Pose3DDistribution:
             pose_3d_observation)
         return posterior_distribution
 
-    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Given a keypoint model and an observation of a 3D pose (specified as a
     # Pose3D object), calculate the Mahalanobis distance between the anchor
-    # point of the pose and the anchor point of the observation. Keypoint  model
-    # is an instance of the KeypointModel class
+    # point of the pose and the anchor point of the observation
     def observation_mahalanobis_distance(
         self,
         keypoint_model,
@@ -1243,7 +1242,7 @@ class Pose3DDistribution:
         observation_mahalanobis_distance = np.asscalar(observation_mahalanobis_distance)
         return observation_mahalanobis_distance
 
-# Class to hold data for a 3D pose track: a collection of 3D pose distributions
+# Class to represent a 3D pose track: a collection of 3D pose distributions
 # describing the path of a person over time. Internal structure is a list of
 # Pose3DDistribution objects, one for each moment in time
 class Pose3DTrack:
@@ -1288,7 +1287,7 @@ class Pose3DTrack:
     def keypoint_means(self):
         return np.array([[keypoint_distribution.mean for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in self.pose_3d_distributions])
 
-    # Return keypoint covariances()
+    # Return keypoint covariances
     def keypoint_covariances(self):
         return np.array([[keypoint_distribution.covariance for keypoint_distribution in pose_3d_distribution.keypoint_distributions] for pose_3d_distribution in self.pose_3d_distributions])
 
@@ -1296,7 +1295,7 @@ class Pose3DTrack:
     def keypoint_position_means(self):
         return self.keypoint_means()[:, :, :3]
 
-    # Return keypoint position means
+    # Return keypoint velocity means
     def keypoint_velocity_means(self):
         return self.keypoint_means()[:, :, 3:]
 
@@ -1308,7 +1307,7 @@ class Pose3DTrack:
     def keypoint_position_std_devs(self):
         return self.keypoint_std_devs()[:, :, :3]
 
-    # Return keypoint position standard deviations
+    # Return keypoint velocity standard deviations
     def keypoint_velocity_std_devs(self):
         return self.keypoint_std_devs()[:, :, 3:]
 
@@ -1316,8 +1315,8 @@ class Pose3DTrack:
     def last(self):
         return self.pose_3d_distributions[-1]
 
-    # Construct and return a list of 3D poses with the mean position keypoints
-    # of the distributions in the track
+    # Construct and return a list of 3D poses with keypoints equal to the the
+    # mean position keypoints of the distributions in the track
     def to_poses_3d(self):
         poses_3d = Poses3D([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in self.pose_3d_distributions]])
         return poses_3d
@@ -1341,11 +1340,10 @@ class Pose3DTrack:
 
     # Given a keypoint model and a time interval, apply the model to the last
     # pose distribution in the track to calculate the next pose distribution and
-    # add this new pose distribution to the track. Keypoint model is an instance
-    # of the KeypointModel class. User can specify time interval explicitly or
-    # method will attempt to infer from ending timestamp. Time unit is specified
-    # above. In the future, we may want to make underlying functions be able to
-    # handle time intervals with units.
+    # add this new pose distribution to the track. User can specify time
+    # interval explicitly or method will attempt to infer from ending timestamp.
+    # Time unit is specified above. In the future, we may want to make
+    # underlying functions be able to handle time intervals with units.
     def predict(
         self,
         delta_t = None,
@@ -1361,8 +1359,7 @@ class Pose3DTrack:
     # Pose3D object), apply the model to the last pose distribution in the track
     # to calculate the posterior 3D pose distribution which incorporates the
     # information from this observation. Replace the last pose distribution in
-    # the track with this posterior distribution. Keypoint model is an instance
-    # of the KeypointModel class
+    # the track with this posterior distribution
     def incorporate_observation(
         self,
         pose_3d_observation):
@@ -1377,7 +1374,7 @@ class Pose3DTrack:
     # to predict the distribution at the time of the observation and then
     # calculate the posterior 3D pose distribution which incorporates the
     # information from this observation. Add this new pose distribution to the
-    # track
+    # track (combines the two methods above)
     def predict_and_incorporate_observation(
         self,
         pose_3d_observation):
@@ -1408,7 +1405,7 @@ class PoseTrackingModel:
         self.cost_threshold = cost_threshold
         self.num_missed_observations_threshold = num_missed_observations_threshold
 
-# Class to hold data for a collection of 3D pose tracks. We allow this object to
+# Class to represent a collection of 3D pose tracks. We allow this object to
 # contain both active tracks and inactive tracks. The active tracks are assumed
 # to be synchronized in the sense that all of the last distributions in the
 # active tracks are assumed to describe the same moment in time
@@ -1524,8 +1521,8 @@ class Pose3DTracks:
     def active_keypoint_velocity_std_devs(self):
         return [np.array([np.sqrt(np.array([np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in pose_3d_distribution.keypoint_distributions])) for pose_3d_distribution in active_track.pose_3d_distributions]) for active_track in self.active_tracks]
 
-    # Construct and return a list of lists of 3D poses with the mean position
-    # keypoints of the distributions in the active tracks
+    # Construct and return a list of lists of 3D poses with keypoints equal to
+    # the mean position keypoints of the distributions in the active tracks
     def active_to_poses_3d(self):
         poses_3d = Poses3D([[pose_3d_distribution.to_pose_3d() for pose_3d_distribution in active_track.pose_3d_distributions] for active_track in self.active_tracks])
         return poses_3d
@@ -1602,8 +1599,8 @@ class Pose3DTracks:
         combined_dataframe.insert(1, 'track_status', 'inactive')
         return combined_dataframe
 
-    # Construct and return a list of dataframes with the data from all tracks
-    # (active and inactive)
+    # Construct and return a dataframe with the data from all tracks (active and
+    # inactive)
     def dataframe(self):
         active_dataframe = self.active_dataframe()
         inactive_dataframe = self.inactive_dataframe()
@@ -1647,8 +1644,8 @@ class Pose3DTracks:
     def last_keypoint_velocity_std_devs(self):
         return np.sqrt(np.array([[np.diag(keypoint_distribution.covariance)[3:] for keypoint_distribution in active_track.last().keypoint_distributions] for active_track in self.active_tracks]))
 
-    # Construct and return a list of 3D poses with the mean position keypoints
-    # of the last distributions in the active tracks
+    # Construct and return a list of 3D poses with keypoints equal to the mean
+    # position keypoints of the last distributions in the active tracks
     def last_to_poses_3d(self):
         poses_3d = [[active_track.last().to_pose_3d() for active_track in self.active_tracks]]
         return Poses3D(poses_3d)
@@ -1692,10 +1689,10 @@ class Pose3DTracks:
 
 
     # Given a keypoint model and a time interval, apply the model to all tracks.
-    # Keypoint model is an instance of the KeypointModel class. User can specify
-    # time interval explicitly or method will attempt to infer from ending
-    # timestamp. Time unit is specified above. In the future, we may want to
-    # make underlying functions be able to handle time intervals with units.
+    # User can specify time interval explicitly or method will attempt to infer
+    # from ending timestamp. Time unit is specified above. In the future, we may
+    # want to make underlying functions be able to handle time intervals with
+    # units.
     def predict(
         self,
         delta_t = None,
@@ -1705,10 +1702,10 @@ class Pose3DTracks:
                 delta_t,
                 next_timestamp)
 
-    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Given a keypoint model and an observation of a 3D pose (specified as a
     # Pose3D object), apply the model to selected tracks to calculate the
     # posterior 3D pose distribution for those tracks. Leave other tracks
-    # unchanged. Keypoint model is an instance of the KeypointModel class
+    # unchanged
     def incorporate_observations(
         self,
         pose_3d_observations,
@@ -1733,7 +1730,7 @@ class Pose3DTracks:
             self.active_tracks[track_index].incorporate_observation(
                 pose_3d_observations_list[observation_index])
 
-    # Given a keypoint model and an observation of the 3D pose (specified as a
+    # Given a keypoint model and an observation of a 3D pose (specified as a
     # Pose3D object), apply the model to predict the tracks at the time of the
     # observations and then incorporate observations for selected tracks to
     # calculate the posterior 3D pose distribution for those tracks. Leave other
@@ -1818,7 +1815,7 @@ class Pose3DTracks:
                 cost_matrix[active_track_index, observation_index] = active_track.observation_mahalanobis_distance(observation)
         return cost_matrix
 
-# Check that all of the last timestamps in a list of 3D pose tracks are not equal
+# Check that all of the last timestamps in a list of 3D pose tracks are equal
 def check_last_timestamps(pose_3d_tracks):
     last_timestamps = np.array([pose_3d_track.last().timestamp for pose_3d_track in pose_3d_tracks])
     if np.any(last_timestamps != None) and np.any(last_timestamps != last_timestamps[0]):
