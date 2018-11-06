@@ -657,28 +657,6 @@ class Poses3D:
                 pose_3d_list.append(pose_3d)
             pose_3d_list_list.append(pose_3d_list)
         return cls(pose_3d_list_list)
-    # def from_keypoints(
-    #     cls,
-    #     keypoints,
-    #     timestamp = None):
-    #     keypoints = np.asarray(keypoints)
-    #     if keypoints.size == 0:
-    #         return cls([[]])
-    #     if keypoints.ndim > 3 or keypoints.ndim < 2:
-    #         print(keypoints.ndim)
-    #         print(keypoints)
-    #         raise ValueError('Keypoints array needs to be 3-dimensional, 2-dimensional or empty')
-    #     if keypoints.ndim == 2:
-    #         keypoints = np.expand_dims(keypoints, 0)
-    #     num_poses = keypoints.shape[0]
-    #     pose_3d_list = []
-    #     for pose_index in range(num_poses):
-    #         pose_3d = Pose3D.from_keypoints(
-    #             keypoints[pose_index],
-    #             timestamp = timestamp)
-    #         pose_3d_list.append(pose_3d)
-    #     pose_3d_list_list = [pose_3d_list]
-    #     return cls(pose_3d_list_list)
 
     # Return the number of 3D poses in each list
     def num_3d_poses(self):
