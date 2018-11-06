@@ -453,6 +453,9 @@ class Pose3D:
         if keypoints.size > 0:
             valid_keypoints = np.logical_not(np.isnan(keypoints[:, 0]))
         else:
+            if keypoints.size != num_body_parts*3:
+                raise ValueError('Keypoints array does not appear to be of size {}*3'.format(num_body_parts))
+            keypoints = keypoints.reshape((num_body_parts, 3))
             valid_keypoints = np.array([])
         return cls(
             keypoints,
