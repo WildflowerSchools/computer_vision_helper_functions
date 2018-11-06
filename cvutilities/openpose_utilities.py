@@ -604,16 +604,25 @@ class Pose3D:
 
 # Class to represent a collection of 3D poses, either a set of poses over time
 # (as from a pose track) or a set of poses at a single point in time (as from a
-# set of observations or the last poses in a set of pose tracks) or set of sets
-# of poses over time (as from a collection of pose tracks). Internal structure
-# is a list of lists of Pose3D objects. When working with one-dimensional
-# collections, input methods add the additional dimension and output methods
-# remove the addtional dimension as necessary
+# set of observations or the last poses in a set of pose tracks or the output of
+# a 3D reconstruction from 2D poses) or set of sets of poses over time (as from
+# a collection of pose tracks). Internal structure is a list of lists of Pose3D
+# objects. When working with one-dimensional collections, input methods add the
+# additional dimension and output methods remove the addtional dimension as
+# necessary
 class Poses3D:
     def __init__(
         self,
-        pose_3d_list_list):
+        pose_3d_list_list,
+        num_cameras_source_images = None,
+        num_2d_poses_source_images = None,
+        source_cameras = None,
+        source_images = None):
         self.pose_3d_list_list = pose_3d_list_list
+        self.num_cameras_source_images = num_cameras_source_images
+        self.num_2d_poses_source_images = num_2d_poses_source_images
+        self.source_cameras = source_cameras
+        self.source_images = source_images
 
     # Build a 3D poses object from a simple array of keypoints. Assume that
     # non-valid keypoints are indicated by numpy NAN values
@@ -695,6 +704,14 @@ class Poses3D:
         else:
             return tags_list
 
+    # Return the timestamps for all of the 3D poses in the lists
+    def timestamps(self):
+        timestamps_list = [np.array([pose_3d.timestamp for pose_3d in pose_3d_list]) for pose_3d_list in self.pose_3d_list_list]
+        if len(timestamps_list) == 1:
+            return timestamps_list[0]
+        else:
+            return timestamps_list
+
     # Return a dataframe with the data from the 3D poses
     def dataframe(self):
         dataframe = pd.DataFrame({
@@ -705,13 +722,24 @@ class Poses3D:
             'tag': self.tags()})
         return(dataframe)
 
-    # Return the timestamps for all of the 3D poses in the lists
-    def timestamps(self):
-        timestamps_list = [np.array([pose_3d.timestamp for pose_3d in pose_3d_list]) for pose_3d_list in self.pose_3d_list_list]
-        if len(timestamps_list) == 1:
-            return timestamps_list[0]
-        else:
-            return timestamps_list
+    # Using the camera calibration parameters from the original source images,
+    # project this collection of 3D poses back into the coordinate system for
+    # each camera to produce a collection of 2D poses
+    def to_poses_2d(self):
+        if self.source_cameras is None:
+            raise ValueError('Source camera calibration data not specified')
+        cameras=[]
+        for camera_index in range(self.num_cameras_source_images):
+            poses = []
+            if self.total_num_3d_poses() > 0:
+                for pose_3d_list_index in range(len(self.pose_3d_list_list)):
+                    for pose_3d_index in range(len(self.pose_3d_list_list[pose_3d_list_index])):
+                        pose_2d = self.pose_3d_list_list[pose_3d_list_index][pose_3d_index].to_pose_2d(self.source_cameras[camera_index])
+                        if pose_2d.tag is None:
+                            pose_2d.set_tag(pose_index_3d)
+                        poses.append(pose_2d)
+            cameras.append(poses)
+        return Poses2D(cameras, self.source_images)
 
     # Plot the lists of poses onto charts representing a top-down view of the
     # room, one chart per list
@@ -783,7 +811,7 @@ class Pose3DGraph:
             source_images)
 
     # Return the number of 3D poses (edges) in the collection
-    def num_3d_poses(self):
+    def total_num_3d_poses(self):
         return self.pose_graph.number_of_edges()
 
     # Return the number of 2D poses (nodes) in the collection
@@ -797,48 +825,40 @@ class Pose3DGraph:
 
     # Return the 3D pose objects themselves (instances of the 3DPose class
     # above)
-    def poses(self):
-        return [edge[2]['pose'] for edge in list(self.pose_graph.edges.data())]
+    def poses_3d(self):
+        return Poses3D(
+            pose_3d_list_list = [[edge[2]['pose'] for edge in list(self.pose_graph.edges.data())]],
+            num_cameras_source_images = self.num_cameras_source_images,
+            num_2d_poses_source_images = self.num_2d_poses_source_images,
+            source_cameras = self.source_cameras,
+            source_images = self.source_images)
 
     # Return the keypoints for all of the 3D poses in the collection
     def keypoints(self):
-        return np.array([edge[2]['pose'].keypoints for edge in list(self.pose_graph.edges.data())])
+        return self.poses_3d().keypoints()
 
     # Return the valid keypoints Boolean vector for all of the 3D poses in the
     # collection.
     def valid_keypoints(self):
-        return np.array([edge[2]['pose'].valid_keypoints for edge in list(self.pose_graph.edges.data())])
+        return self.poses_3d().valid_keypoints()
 
     # Return the projection errors for all of the 3D poses in the collection
     def projection_errors(self):
-        return np.array([edge[2]['pose'].projection_error for edge in list(self.pose_graph.edges.data())])
+        return self.poses_3d().projection_errors()
 
     # Return the tags for all of the 3D poses in the collection.
     def tags(self):
-        return [edge[2]['pose'].tag for edge in list(self.pose_graph.edges.data())]
+        return self.poses_3d().tags()
 
     # Return the timestamps for all of the 3D poses in the collection.
     def timestamps(self):
-        return np.array([edge[2]['pose'].timestamp for edge in list(self.pose_graph.edges.data())])
+        return self.poses_3d().timestamps()
 
     # Using the camera calibration parameters from the original source images,
     # project this collection of 3D poses back into the coordinate system for
     # each camera to produce a collection of 2D poses
     def to_poses_2d(self):
-        if self.source_cameras is None:
-            raise ValueError('Source camera calibration data not specified')
-        num_3d_poses = self.num_3d_poses()
-        cameras=[]
-        for camera_index in range(self.num_cameras_source_images):
-            poses = []
-            if num_3d_poses > 0:
-                for pose_index_3d in range(num_3d_poses):
-                    pose_2d = self.poses()[pose_index_3d].to_pose_2d(self.source_cameras[camera_index])
-                    if pose_2d.tag is None:
-                        pose_2d.set_tag(pose_index_3d)
-                    poses.append(pose_2d)
-            cameras.append(poses)
-        return Poses2D(cameras, self.source_images)
+        return self.poses_3d().to_poses_2d()
 
     # Draw the graph representing all of the 3D poses in the collection (2D
     # poses as nodes, 3D poses as edges)
@@ -928,31 +948,12 @@ class Pose3DGraph:
         best_matches = likely_matches.extract_best_matches_from_likely_matches()
         return best_matches
 
-    # Draw the poses onto a chart representing a top-down view of the room. We
-    # separate this from the plotting function below because we might want to
-    # draw other elements before formatting and showing the chart
-    def draw_topdown(self):
-        num_poses = len(self.poses())
-        pose_indices = self.pose_indices()
-        for pose_index in range(num_poses):
-            pose = self.poses()[pose_index]
-            pose.draw_topdown()
-            if pose.tag is not None:
-                tag = pose.tag
-            else:
-                tag = pose_index
-            plottable_points = pose.keypoints[pose.valid_keypoints]
-            centroid = np.mean(plottable_points[:, :2], 0)
-            plt.text(centroid[0], centroid[1], tag)
-
     # Plot the poses onto a chart representing a top-down view of the room.
     # Calls the drawing function above, adds formating, and shows the plot
     def plot_topdown(
         self,
         room_corners = None):
-        self.draw_topdown()
-        cvutilities.camera_utilities.format_3d_topdown_plot(room_corners)
-        plt.show()
+        self.poses_3d().plot_topdown(room_corners)
 
 # Class to define a model for each keypoint. We use a simple constant-velocity
 # model in which only position is observed. We specify transition error (drift)
