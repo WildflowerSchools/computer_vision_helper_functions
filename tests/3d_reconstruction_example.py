@@ -16,7 +16,7 @@ all_2d_poses = cvutilities.openpose_utilities.Poses2D.from_openpose_timestep_wil
         camera_names,
         datetime)
 
-all_3d_poses = cvutilities.openpose_utilities.Poses3D.from_poses_2d_timestep(
+all_3d_poses = cvutilities.openpose_utilities.Pose3DGraph.from_poses_2d_timestep(
     all_2d_poses,
     camera_calibration_data_all_cameras)
 
