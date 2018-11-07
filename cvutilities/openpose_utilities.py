@@ -722,13 +722,22 @@ class Poses3D:
 
     # Return a dataframe with the data from the 3D poses
     def dataframe(self):
+        flattened_pose_3d_list = [pose_3d for pose_3d_list in self.pose_3d_list_list for pose_3d in pose_3d_list]
         dataframe = pd.DataFrame({
-            'timestamp': self.timestamps(),
-            'keypoints': [np.array(keypoints) for keypoints in self.keypoints().tolist()],
-            'valid_keypoints': [np.array(valid_keypoints) for valid_keypoints in self.valid_keypoints().tolist()],
-            'keypoint_std_devs': [np.array(keypoint_std_devs) for keypoint_std_devs in self.keypoint_std_devs().tolist()],
-            'tag': self.tags()})
+            'timestamp': [pose_3d.timestamp for pose_3d in flattened_pose_3d_list],
+            'keypoints': [pose_3d.keypoints for pose_3d in flattened_pose_3d_list],
+            'valid_keypoints': [pose_3d.valid_keypoints for pose_3d in flattened_pose_3d_list],
+            'keypoint_std_devs': [pose_3d.keypoint_std_devs for pose_3d in flattened_pose_3d_list],
+            'tag': [pose_3d.tag for pose_3d in flattened_pose_3d_list]})
         return(dataframe)
+    # def dataframe(self):
+    #     dataframe = pd.DataFrame({
+    #         'timestamp': self.timestamps(),
+    #         'keypoints': [np.array(keypoints) for keypoints in self.keypoints().tolist()],
+    #         'valid_keypoints': [np.array(valid_keypoints) for valid_keypoints in self.valid_keypoints().tolist()],
+    #         'keypoint_std_devs': [np.array(keypoint_std_devs) for keypoint_std_devs in self.keypoint_std_devs().tolist()],
+    #         'tag': self.tags()})
+    #     return(dataframe)
 
     # Using the camera calibration parameters from the original source images,
     # project this collection of 3D poses back into the coordinate system for
