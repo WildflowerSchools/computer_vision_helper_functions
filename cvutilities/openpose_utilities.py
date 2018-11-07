@@ -1177,8 +1177,8 @@ class Pose3DDistribution:
         keypoint_linear_gaussian_model = keypoint_model.linear_gaussian_model(delta_t)
         next_keypoint_distributions = []
         for body_part_index in range(num_body_parts):
-            next_keypoint_distribution = keypoint_linear_gaussian_model.predict(
-                current_keypoint_distributions[body_part_index])
+            next_keypoint_distribution = current_keypoint_distributions[body_part_index].predict(
+                keypoint_linear_gaussian_model)
             next_keypoint_distributions.append(next_keypoint_distribution)
         next_tag = current_tag
         next_pose_3d_distribution = Pose3DDistribution(
@@ -1206,8 +1206,8 @@ class Pose3DDistribution:
         posterior_keypoint_distributions = []
         for body_part_index in range(num_body_parts):
             if pose_3d_observation.valid_keypoints[body_part_index]:
-                posterior_keypoint_distribution = keypoint_linear_gaussian_model.incorporate_observation(
-                    prior_keypoint_distributions[body_part_index],
+                posterior_keypoint_distribution = prior_keypoint_distributions[body_part_index].incorporate_observation(
+                    keypoint_linear_gaussian_model,
                     pose_3d_observation.keypoints[body_part_index])
             else:
                 posterior_keypoint_distribution = prior_keypoint_distributions[body_part_index]
@@ -1256,8 +1256,8 @@ class Pose3DDistribution:
         anchor_point_state_distribution = self.keypoint_distributions[neck_index]
         anchor_point_observation = pose_3d_observation.anchor_point()
         keypoint_linear_gaussian_model = keypoint_model.linear_gaussian_model()
-        observation_mahalanobis_distance = keypoint_linear_gaussian_model.observation_mahalanobis_distance(
-            anchor_point_state_distribution,
+        observation_mahalanobis_distance = anchor_point_state_distribution.observation_mahalanobis_distance(
+            keypoint_linear_gaussian_model,
             anchor_point_observation)
         observation_mahalanobis_distance = np.asscalar(observation_mahalanobis_distance)
         return observation_mahalanobis_distance
