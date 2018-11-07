@@ -200,9 +200,9 @@ class Pose2D:
 class Poses2D:
     def __init__(
         self,
-        poses,
+        pose_2d_list_list,
         source_images = None):
-        self.poses = poses
+        self.pose_2d_list_list = pose_2d_list_list
         self.source_images = source_images
 
     # Pull the pose data for a single camera from a dictionary with the same
@@ -214,9 +214,9 @@ class Poses2D:
         source_images = None,
         timestamp=None):
         people_json_data = json_data[openpose_people_list_name]
-        poses = [[Pose2D.from_openpose_person_json_data(person_json_data, timestamp) for person_json_data in people_json_data]]
+        pose_2d_list_list = [[Pose2D.from_openpose_person_json_data(person_json_data, timestamp) for person_json_data in people_json_data]]
         return cls(
-            poses,
+            pose_2d_list_list,
             source_images)
 
     # Pull the pose data for a single camera from a string containing the
@@ -304,7 +304,7 @@ class Poses2D:
         datetime,
         fetch_source_images = False):
         s3_bucket_name = classroom_data_wildflower_s3_bucket_name
-        poses = []
+        pose_2d_list_list = []
         for camera_name in camera_names:
             s3_object_name = generate_pose_2d_wildflower_s3_object_name(
                 classroom_name,
@@ -314,7 +314,7 @@ class Poses2D:
                 s3_bucket_name,
                 s3_object_name,
                 timestamp = datetime)
-            poses.append(camera.poses[0])
+            pose_2d_list_list.append(camera.pose_2d_list_list[0])
         if fetch_source_images:
             source_images = []
             for camera_name in camera_names:
@@ -326,7 +326,7 @@ class Poses2D:
         else:
             source_images = None
         return cls(
-            poses,
+            pose_2d_list_list,
             source_images)
 
     # Set pose tags
@@ -341,35 +341,35 @@ class Poses2D:
             if num_tags != self.num_poses()[tag_list_index]:
                 raise ValueError('Length of tag list does not match number of poses')
             for tag_index in range(num_tags):
-                self.poses[tag_list_index][tag_index].tag = tag_lists[tag_list_index][tag_index]
+                self.pose_2d_list_list[tag_list_index][tag_index].tag = tag_lists[tag_list_index][tag_index]
 
     # Return number of cameras
     def num_cameras(self):
-        return len(self.poses)
+        return len(self.pose_2d_list_list)
 
     # Return number of poses for each camera
     def num_poses(self):
-        return [len(camera) for camera in self.poses]
+        return [len(camera) for camera in self.pose_2d_list_list]
 
     # Return keypoints
     def keypoints(self):
-        return [[pose.keypoints for pose in camera] for camera in self.poses]
+        return [[pose.keypoints for pose in camera] for camera in self.pose_2d_list_list]
 
     # Return confidence_scores
     def confidence_scores(self):
-        return [[pose.confidence_scores for pose in camera] for camera in self.poses]
+        return [[pose.confidence_scores for pose in camera] for camera in self.pose_2d_list_list]
 
     # Return valid keypoints
     def valid_keypoints(self):
-        return [[pose.valid_keypoints for pose in camera] for camera in self.poses]
+        return [[pose.valid_keypoints for pose in camera] for camera in self.pose_2d_list_list]
 
     # Return pose tags
     def tags(self):
-        return [[pose.tag for pose in camera] for camera in self.poses]
+        return [[pose.tag for pose in camera] for camera in self.pose_2d_list_list]
 
     # Return pose timestamps
     def timestamps(self):
-        return [[pose.timestamp for pose in camera] for camera in self.poses]
+        return [[pose.timestamp for pose in camera] for camera in self.pose_2d_list_list]
 
     # Plot the poses onto a set of charts, one for each source camera view.
     def plot(
@@ -387,7 +387,7 @@ class Poses2D:
                 current_image_size = image_size
             num_poses = self.num_poses()[camera_index]
             for pose_index in range(num_poses):
-                pose = self.poses[camera_index][pose_index]
+                pose = self.pose_2d_list_list[camera_index][pose_index]
                 pose.draw()
                 if pose.tag is not None:
                     tag = pose.tag
@@ -800,8 +800,8 @@ class Pose3DGraph:
                 for pose_index_a in range(num_poses_a):
                     for pose_index_b in range(num_poses_b):
                         pose_3d = Pose3D.from_poses_2d(
-                            poses_2d.poses[camera_index_a][pose_index_a],
-                            poses_2d.poses[camera_index_b][pose_index_b],
+                            poses_2d.pose_2d_list_list[camera_index_a][pose_index_a],
+                            poses_2d.pose_2d_list_list[camera_index_b][pose_index_b],
                             cameras[camera_index_a]['rotation_vector'],
                             cameras[camera_index_a]['translation_vector'],
                             cameras[camera_index_b]['rotation_vector'],
