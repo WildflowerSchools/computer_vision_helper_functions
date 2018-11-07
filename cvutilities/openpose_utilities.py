@@ -1104,6 +1104,8 @@ class Pose3DDistribution:
             tag,
             timestamp)
         if pose_3d_observation is not None:
+            if keypoint_model is None:
+                raise ValueError('Observation provided but no keypoint model is specified')
             initial_distribution = initial_distribution.incorporate_observation(
                 keypoint_model,
                 pose_3d_observation)
