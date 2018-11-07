@@ -730,14 +730,6 @@ class Poses3D:
             'keypoint_std_devs': [pose_3d.keypoint_std_devs for pose_3d in flattened_pose_3d_list],
             'tag': [pose_3d.tag for pose_3d in flattened_pose_3d_list]})
         return(dataframe)
-    # def dataframe(self):
-    #     dataframe = pd.DataFrame({
-    #         'timestamp': self.timestamps(),
-    #         'keypoints': [np.array(keypoints) for keypoints in self.keypoints().tolist()],
-    #         'valid_keypoints': [np.array(valid_keypoints) for valid_keypoints in self.valid_keypoints().tolist()],
-    #         'keypoint_std_devs': [np.array(keypoint_std_devs) for keypoint_std_devs in self.keypoint_std_devs().tolist()],
-    #         'tag': self.tags()})
-    #     return(dataframe)
 
     # Using the camera calibration parameters from the original source images,
     # project this collection of 3D poses back into the coordinate system for
@@ -1144,10 +1136,6 @@ class Pose3DDistribution:
     # Return keypoint velocity standard deviations
     def keypoint_velocity_std_devs(self):
         return self.keypoint_std_devs()[:, 3:]
-
-    # Return tag
-    def tag():
-        return self.tag
 
     # Construct and return a 3D pose with the keypoints equal to the mean
     # position keypoints of the distribution and position standard deviations
