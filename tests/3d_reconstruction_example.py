@@ -7,9 +7,11 @@ import json
 classroom_name = 'sandbox'
 datetime = np.datetime64('2018-07-04T18:23:00')
 camera_names = ['camera01', 'camera02', 'camera03', 'camera04']
+data_directory = './data'
 
-camera_calibration_data_all_cameras = cvutilities.camera_utilities.fetch_camera_calibration_data_from_local_drive_multiple_cameras(
-    camera_names)
+camera_calibration_parameters = cvutilities.camera_utilities.fetch_camera_calibration_data_from_local_drive_multiple_cameras(
+    camera_names = camera_names,
+    camera_calibration_data_directory = './data')
 
 all_2d_poses = cvutilities.openpose_utilities.Poses2D.from_openpose_timestep_wildflower_s3(
         classroom_name,
@@ -18,7 +20,7 @@ all_2d_poses = cvutilities.openpose_utilities.Poses2D.from_openpose_timestep_wil
 
 all_3d_poses = cvutilities.openpose_utilities.Pose3DGraph.from_poses_2d_timestep(
     all_2d_poses,
-    camera_calibration_data_all_cameras)
+    camera_calibration_parameters)
 
 matched_3d_poses = all_3d_poses.extract_matched_poses()
 
