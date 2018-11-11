@@ -718,6 +718,16 @@ class Poses3D:
         pose_3d_graph_matched = pose_3d_graph_all.extract_matched_poses()
         return cls.from_pose_3d_graph(pose_3d_graph_matched)
 
+    # Remove empty 3D poses
+    def remove_empty_poses(self):
+        for pose_3d_list_index in range(len(self.pose_3d_list_list)):
+            pose_3d_list = self.pose_3d_list_list[pose_3d_list_index]
+            reverse_sorted_pose_3d_indices = sorted(range(len(pose_3d_list)), reverse = True)
+            for pose_3d_index in reverse_sorted_pose_3d_indices:
+                pose_3d = pose_3d_list[pose_3d_index]
+                if np.all(np.logical_not(pose_3d.valid_keypoints)):
+                    del self.pose_3d_list_list[pose_3d_list_index][pose_3d_index]
+
     # Return the number of 3D poses in each list
     def num_3d_poses(self):
         num_3d_poses_list = [len(pose_3d_list) for pose_3d_list in self.pose_3d_list_list]
@@ -1848,6 +1858,7 @@ class Pose3DTracks:
     def update(
         self,
         pose_3d_observations):
+        pose_3d_observations.remove_empty_poses()
         if pose_3d_observations.total_num_3d_poses() > 0:
             if len(pose_3d_observations.pose_3d_list_list) != 1:
                 raise ValueError('Observations must be a one-dimensional object')
