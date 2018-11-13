@@ -1933,7 +1933,7 @@ def rms_projection_error(
     image_points_reconstructed = image_points_reconstructed.reshape((-1,2))
     if image_points.shape != image_points_reconstructed.shape:
         raise ValueError('Sets of image points do not appear to be the same shape')
-    rms_error = np.sqrt(np.sum(np.square(image_points_reconstructed - image_points))/image_points.shape[0])
+    rms_error = np.linalg.norm(image_points_reconstructed - image_points)/np.sqrt(image_points.shape[0])
     return rms_error
 
 # For two sets of pose keypoints, extract the intersection of their valid
